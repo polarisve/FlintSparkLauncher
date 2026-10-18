@@ -1,0 +1,255 @@
+/*
+ * Flint Spark Launcher (FSL) visual layer.
+ * Loaded after root.css (see StyleSheets.java) and overrides the upstream HMCL look:
+ * dark glass surfaces, violet-blue accents, larger rounded controls.
+ * Colors come from the -monet-* variables, so a custom theme color in settings still works.
+ */
+
+/* ---------- Palette helpers ---------- */
+.root {
+    -fsl-ember: #7B6CFF;
+    -fsl-ember-deep: #4361E8;
+    -fsl-ember-light: #A99BFF;
+    -fsl-glass: rgba(16, 15, 30, 0.62);
+    -fsl-glass-strong: rgba(13, 12, 26, 0.95);
+    -fsl-glass-border: rgba(150, 140, 255, 0.16);
+    -fsl-text-dim: rgba(228, 230, 255, 0.62);
+}
+
+/* ---------- Window frame and sidebar ---------- */
+.jfx-decorator {
+    -fx-decorator-color: #0D0C1A;
+}
+
+.gray-background {
+    -fx-background-color: -fsl-glass-strong;
+    -fx-border-color: transparent -fsl-glass-border transparent transparent;
+    -fx-border-width: 0 1 0 0;
+}
+
+.advanced-list-box-content {
+    -fx-padding: 14 8 8 8;
+    -fx-spacing: 2;
+}
+
+.advanced-list-item > .rippler-container > .container {
+    -fx-padding: 10 14 10 14;
+    -fx-background-radius: 10;
+}
+
+.advanced-list-item:hover > .rippler-container > .container {
+    -fx-background-color: rgba(140, 125, 255, 0.10);
+}
+
+.advanced-list-item:selected > .rippler-container > .container {
+    -fx-background-color: linear-gradient(to right, rgba(123, 108, 255, 0.32), rgba(123, 108, 255, 0.06));
+    -fx-border-color: transparent transparent transparent -fsl-ember;
+    -fx-border-width: 0 0 0 3;
+    -fx-border-radius: 10;
+}
+
+.advanced-list-item:selected > .rippler-container > .container > .two-line-list-item > .first-line > .title {
+    -fx-text-fill: -fsl-ember-light;
+}
+
+.advanced-list-item:selected .svg {
+    -fx-fill: -fsl-ember-light;
+}
+
+/* ---------- Home page hero ---------- */
+.fsl-hero-tag {
+    -fx-text-fill: -fsl-ember;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.fsl-hero-title {
+    -fx-text-fill: #F2F2FF;
+    -fx-font-size: 34px;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.55), 12, 0.2, 0, 2);
+}
+
+.fsl-hero-subtitle {
+    -fx-text-fill: -fsl-text-dim;
+    -fx-font-size: 13px;
+}
+
+/* ---------- Launch button ---------- */
+.launch-pane {
+    -fx-max-height: 60px;
+    -fx-min-height: 60px;
+    -fx-max-width: 240px;
+    -fx-min-width: 240px;
+}
+
+.launch-pane > .jfx-button {
+    -fx-max-height: 60px;
+    -fx-min-height: 60px;
+    -fx-background-color: linear-gradient(to bottom right, -fsl-ember-light, -fsl-ember 45%, -fsl-ember-deep);
+}
+
+.launch-pane > .jfx-button.launch-button {
+    -fx-max-width: 204px;
+    -fx-min-width: 204px;
+    -fx-background-radius: 14px 0 0 14px;
+    -fx-border-color: transparent rgba(20, 16, 80, 0.35) transparent transparent;
+    -fx-border-width: 0 1px 0 0;
+}
+
+.launch-pane > .jfx-button.menu-button {
+    -fx-max-width: 36px;
+    -fx-min-width: 36px;
+    -fx-background-radius: 0 14px 14px 0;
+}
+
+.launch-pane > .jfx-button > StackPane > .jfx-rippler {
+    -jfx-rippler-fill: #FFFFFF;
+}
+
+.launch-pane > .launch-button .label {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-weight: bold;
+}
+
+.launch-pane .svg {
+    -fx-fill: #FFFFFF;
+}
+
+/* ---------- Cards, lists and dialogs: dark glass ---------- */
+.card,
+.component-list,
+.jfx-dialog-layout {
+    -fx-background-color: -fsl-glass;
+    -fx-background-radius: 12;
+    -fx-border-color: -fsl-glass-border;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+}
+
+/* ---------- Buttons and inputs ---------- */
+.jfx-button.dialog-accept,
+.jfx-button.raised {
+    -fx-background-color: linear-gradient(to bottom right, -fsl-ember-light, -fsl-ember-deep);
+    -fx-text-fill: #FFFFFF;
+    -fx-background-radius: 10;
+}
+
+.jfx-text-field,
+.jfx-password-field,
+.jfx-combo-box {
+    -jfx-focus-color: -fsl-ember;
+}
+
+.jfx-toggle-button {
+    -jfx-toggle-color: -fsl-ember;
+    -jfx-toggle-line-color: rgba(123, 108, 255, 0.45);
+}
+
+/* ---------- Scrollbars ---------- */
+.scroll-bar .thumb {
+    -fx-background-color: rgba(150, 140, 255, 0.28);
+    -fx-background-radius: 8;
+}
+
+.scroll-bar .thumb:hover {
+    -fx-background-color: rgba(150, 140, 255, 0.5);
+}
+
+/* ---------- Download / mod search ---------- */
+.fsl-search-card {
+    -fx-background-color: linear-gradient(to bottom right, rgba(123, 108, 255, 0.16), rgba(16, 15, 30, 0.72));
+    -fx-background-radius: 16;
+    -fx-border-radius: 16;
+    -fx-padding: 16;
+}
+
+.fsl-addon-card {
+    -fx-background-color: rgba(22, 20, 42, 0.72);
+    -fx-background-radius: 14;
+    -fx-border-color: -fsl-glass-border;
+    -fx-border-radius: 14;
+}
+
+.fsl-addon-card:hover {
+    -fx-background-color: rgba(40, 34, 84, 0.85);
+    -fx-border-color: rgba(150, 140, 255, 0.45);
+    -fx-effect: dropshadow(gaussian, rgba(110, 95, 255, 0.35), 18, 0.1, 0, 2);
+}
+
+.fsl-addon-card .two-line-list-item > .first-line > .title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.fsl-addon-card .tag {
+    -fx-background-color: rgba(123, 108, 255, 0.18);
+    -fx-background-radius: 6;
+    -fx-text-fill: -fsl-ember-light;
+}
+
+/* ---------- Page header + pill tabs (download page) ---------- */
+.fsl-download-page {
+    -fx-background-color: linear-gradient(to bottom, rgba(26, 22, 64, 0.55), rgba(12, 11, 24, 0.0) 40%);
+}
+
+.fsl-page-title {
+    -fx-text-fill: #F2F2FF;
+    -fx-font-size: 26px;
+    -fx-font-weight: bold;
+}
+
+.fsl-page-subtitle {
+    -fx-text-fill: -fsl-text-dim;
+    -fx-font-size: 12px;
+}
+
+.fsl-pill-tabs {
+    -fx-background-color: rgba(10, 9, 22, 0.70);
+    -fx-background-radius: 14;
+    -fx-border-color: -fsl-glass-border;
+    -fx-border-radius: 14;
+    -fx-padding: 4;
+}
+
+.fsl-pill-indicator {
+    -fx-background-color: linear-gradient(to bottom right, -fsl-ember-light, -fsl-ember 50%, -fsl-ember-deep);
+    -fx-background-radius: 10;
+    -fx-effect: dropshadow(gaussian, rgba(110, 95, 255, 0.55), 14, 0.15, 0, 2);
+}
+
+.fsl-pill {
+    -fx-background-color: transparent;
+    -fx-background-radius: 10;
+    -fx-padding: 8 16 8 14;
+    -fx-text-fill: -fsl-text-dim;
+    -fx-font-size: 13px;
+    -fx-cursor: hand;
+}
+
+.fsl-pill .svg {
+    -fx-fill: -fsl-text-dim;
+}
+
+.fsl-pill:hover {
+    -fx-text-fill: #F2F2FF;
+}
+
+.fsl-pill:hover .svg {
+    -fx-fill: #F2F2FF;
+}
+
+.fsl-pill:selected {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-weight: bold;
+}
+
+.fsl-pill:selected .svg {
+    -fx-fill: #FFFFFF;
+}
+
+.fsl-pill-separator {
+    -fx-min-width: 1;
+    -fx-max-width: 1;
+    -fx-background-color: rgba(150, 140, 255, 0.22);
+}
