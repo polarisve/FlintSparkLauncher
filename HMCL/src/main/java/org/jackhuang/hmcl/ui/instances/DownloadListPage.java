@@ -84,6 +84,17 @@ public class DownloadListPage extends Control implements DecoratorPage {
     private final DownloadPage.DownloadCallback callback;
     private boolean searchInitialized = false;
     protected final BooleanProperty supportChinese = new SimpleBooleanProperty();
+
+    /// FSL: keyword pushed from the global search box; the skin fills the name field and searches.
+    private final javafx.beans.property.StringProperty externalKeyword = new javafx.beans.property.SimpleStringProperty(this, "externalKeyword");
+
+    /// FSL: searches this list for `keyword`, as if it had been typed into the name field.
+    ///
+    /// @param keyword the search text
+    public void searchFor(String keyword) {
+        externalKeyword.set(null);
+        externalKeyword.set(keyword);
+    }
     private final ObservableList<Node> actions = FXCollections.observableArrayList();
     protected final ListProperty<String> downloadSources = new SimpleListProperty<>(this, "downloadSources", FXCollections.observableArrayList());
     protected final StringProperty downloadSource = new SimpleStringProperty();
@@ -516,6 +527,12 @@ public class DownloadListPage extends Control implements DecoratorPage {
 
                 FXUtils.onChange(control.downloadSource, v -> searchAction.handle(null));
                 nameField.setOnAction(searchAction);
+                FXUtils.onChange(control.externalKeyword, keyword -> {
+                    if (keyword != null) {
+                        nameField.setText(keyword);
+                        searchAction.handle(null);
+                    }
+                });
                 gameVersionField.setOnAction(searchAction);
                 categoryComboBox.setOnAction(searchAction);
                 sortComboBox.setOnAction(searchAction);

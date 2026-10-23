@@ -19,6 +19,10 @@ package org.jackhuang.hmcl.ui.decorator;
 
 import org.jackhuang.hmcl.ui.construct.Navigator;
 import org.jackhuang.hmcl.ui.fsl.FslNavigationRail;
+import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
+import org.jackhuang.hmcl.ui.Controllers;
+import org.jackhuang.hmcl.ui.fsl.ds.FslTopBar;
+import org.jackhuang.hmcl.ui.download.DownloadPage;
 
 import com.jfoenix.controls.JFXButton;
 import javafx.animation.Interpolator;
@@ -122,7 +126,18 @@ final class MainWindowPane extends StackPane {
         titleBar = new BorderPane();
         titleBar.setPickOnBounds(false);
         titleBar.getStyleClass().add("jfx-tool-bar");
-        titleBar.setRight(windowButtons);
+        // FSL: global search left of the window buttons; Enter searches mods on the download page
+        FslTopBar search = new FslTopBar(i18n("fsl.search.prompt"), keyword -> {
+            decorator.getNavigator().clear();
+            DownloadPage page = Controllers.getDownloadPage();
+            Controllers.navigate(page);
+            page.showModDownloads().searchFor(keyword);
+        });
+        search.setPickOnBounds(false);
+        search.setStyle("-fx-padding: 0 8 0 0;");
+        HBox right = new HBox(search, windowButtons);
+        right.setAlignment(Pos.CENTER_RIGHT);
+        titleBar.setRight(right);
 
         navBarPane = new TransitionPane();
         titleBar.setCenter(navBarPane);
