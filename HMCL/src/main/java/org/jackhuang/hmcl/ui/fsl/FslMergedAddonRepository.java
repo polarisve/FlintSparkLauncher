@@ -37,6 +37,9 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Stream;
 
@@ -50,6 +53,10 @@ import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 /// Modrinth IDs are base62 strings.
 @NotNullByDefault
 public final class FslMergedAddonRepository implements RemoteAddonRepository {
+
+    /// How long a search waits for CurseForge after Modrinth has answered.
+    private static final long CURSEFORGE_WAIT_NANOS = TimeUnit.SECONDS.toNanos(4);
+
 
     /// Shared instance; the repository is stateless.
     public static final FslMergedAddonRepository INSTANCE = new FslMergedAddonRepository();
@@ -125,6 +132,7 @@ public final class FslMergedAddonRepository implements RemoteAddonRepository {
                                SortType sortType, SortOrder sortOrder) throws IOException {
         // Categories are platform specific, so the merged view always searches all categories
         int half = Math.max(1, (pageSize + 1) / 2);
+        long deadline = System.nanoTime() + CURSEFORGE_WAIT_NANOS;
 
         CompletableFuture<SearchResult> modrinthSearch = CompletableFuture.supplyAsync(
                 () -> searchQuietly(modrinth(), downloadProvider, type, gameVersion, pageOffset, half, searchFilter, sortType, sortOrder),
@@ -134,7 +142,11 @@ public final class FslMergedAddonRepository implements RemoteAddonRepository {
                 Schedulers.io());
 
         @Nullable SearchResult modrinthResult = join(modrinthSearch, "Modrinth");
-        @Nullable SearchResult curseResult = join(curseSearch, "CurseForge");
+        // The CurseForge mirror can take ~20 s. When Modrinth already answered, don't keep the
+        // spinner going for it: wait only until the deadline, then show what we have.
+        @Nullable SearchResult curseResult = modrinthResult != null
+                ? joinBefore(curseSearch, "CurseForge", deadline)
+                : join(curseSearch, "CurseForge");
         if (modrinthResult == null && curseResult == null) {
             throw new IOException("Both Modrinth and CurseForge searches failed");
         }
@@ -174,6 +186,24 @@ public final class FslMergedAddonRepository implements RemoteAddonRepository {
             return future.join();
         } catch (CompletionException e) {
             LOG.warning("FSL merged search: " + name + " failed", e.getCause() != null ? e.getCause() : e);
+            return null;
+        }
+    }
+
+    /// Waits for a backend search until `deadline` (a [System#nanoTime()] value).
+    ///
+    /// @return the result, or `null` if that backend failed or was still running at the deadline
+    private static @Nullable SearchResult joinBefore(CompletableFuture<SearchResult> future, String name, long deadline) {
+        try {
+            return future.get(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+        } catch (TimeoutException e) {
+            LOG.info("FSL merged search: " + name + " is slow, showing results without it");
+            return null;
+        } catch (ExecutionException e) {
+            LOG.warning("FSL merged search: " + name + " failed", e.getCause() != null ? e.getCause() : e);
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return null;
         }
     }

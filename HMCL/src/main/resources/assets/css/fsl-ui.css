@@ -462,3 +462,48 @@
 .gray-background {
     -fx-background-color: transparent;
 }
+
+/* ---------- Home: left panel and compact launch button ---------- */
+.fsl-home-side {
+    -fx-background-color: rgba(29, 25, 41, 0.86);
+    -fx-border-color: transparent #2A2440 transparent transparent;
+    -fx-border-width: 0 1 0 0;
+    -fx-padding: 14 12 14 12;
+}
+
+.launch-pane {
+    -fx-max-height: 40px;
+    -fx-min-height: 40px;
+    -fx-max-width: 196px;
+    -fx-min-width: 196px;
+}
+
+.launch-pane > .jfx-button {
+    -fx-max-height: 40px;
+    -fx-min-height: 40px;
+    -fx-translate-y: 0;
+    -fx-background-color: -fsl2-primary;
+}
+
+.launch-pane > .jfx-button.launch-button {
+    -fx-max-width: 168px;
+    -fx-min-width: 168px;
+    -fx-background-radius: 8 0 0 8;
+    -fx-border-color: transparent rgba(22, 15, 43, 0.35) transparent transparent;
+    -fx-border-width: 0 1 0 0;
+}
+
+.launch-pane > .jfx-button.menu-button {
+    -fx-max-width: 28px;
+    -fx-min-width: 28px;
+    -fx-background-radius: 0 8 8 0;
+}
+
+.launch-pane > .jfx-button .label, .launch-pane > .jfx-button .svg {
+    -fx-text-fill: -fsl2-on-primary;
+    -fx-fill: -fsl2-on-primary;
+}
+
+.launch-pane > .launch-button .label {
+    -fx-font-size: 13px;
+}
