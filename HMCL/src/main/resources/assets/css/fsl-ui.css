@@ -297,3 +297,167 @@
 .fsl-toggle-track:selected .fsl-toggle-thumb {
     -fx-fill: -fsl2-on-primary;
 }
+
+/* ---------- Global restyle of legacy pages ----------
+ * Remap the theme color roles to the FSL palette, so every page that still uses the
+ * upstream components picks up the new look without being rewritten. */
+.root {
+    -monet-primary: #A78BFA;
+    -monet-on-primary: #160F2B;
+    -monet-primary-container: #3B2F63;
+    -monet-on-primary-container: #EDE6FF;
+    -monet-secondary-container: #352C52;
+    -monet-on-secondary-container: #F3F0FF;
+    -monet-tertiary: #5EEAD4;
+    -monet-surface: #14111D;
+    -monet-surface-tint: #A78BFA;
+    -monet-surface-bright: #3A3252;
+    -monet-surface-variant: #2F2843;
+    -monet-surface-container-lowest: #100D18;
+    -monet-surface-container-low: #1D1929;
+    -monet-surface-container: #221D31;
+    -monet-surface-container-high: #2F2843;
+    -monet-surface-container-highest: #372F4E;
+    -monet-on-surface: #F3F0FF;
+    -monet-on-surface-variant: #B8AEDB;
+    -monet-outline: #5A4D80;
+    -monet-outline-variant: #3C3358;
+    -monet-error: #FB7185;
+    -monet-error-container: #4A1D2A;
+    -monet-on-error-container: #FFE4E8;
+    -monet-inverse-surface: #F3F0FF;
+    -monet-inverse-on-surface: #1D1929;
+    -monet-inverse-primary: #6D5DF5;
+    -monet-primary-transparent-50: rgba(167, 139, 250, 0.5);
+    -monet-primary-transparent-80: rgba(167, 139, 250, 0.8);
+    -monet-secondary-container-transparent-50: rgba(53, 44, 82, 0.5);
+    -monet-secondary-container-transparent-80: rgba(53, 44, 82, 0.8);
+    -monet-surface-transparent-50: rgba(20, 17, 29, 0.5);
+    -monet-surface-transparent-80: rgba(20, 17, 29, 0.8);
+    -monet-surface-container-low-transparent-80: rgba(29, 25, 41, 0.8);
+    -monet-on-surface-variant-transparent-38: rgba(184, 174, 219, 0.38);
+    -monet-inverse-surface-transparent-80: rgba(243, 240, 255, 0.8);
+}
+
+/* Title bar: blends into the window, clear back/close buttons */
+.jfx-tool-bar, .jfx-tool-bar.background {
+    -fx-background-color: transparent;
+}
+
+.jfx-tool-bar .jfx-decorator-title, .jfx-tool-bar Label {
+    -fx-text-fill: -fsl2-text;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.jfx-tool-bar .jfx-decorator-button {
+    -fx-background-radius: 10;
+}
+
+.jfx-tool-bar .jfx-decorator-button:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.14);
+}
+
+/* Cards and list rows used across pages */
+.card, .card-non-transparent, .options-list-item, .md-list-cell, .installer-item-wrapper, .game-directory-list-item {
+    -fx-background-color: -fsl2-card;
+    -fx-background-radius: 14;
+    -fx-border-color: -fsl2-card-line;
+    -fx-border-radius: 14;
+}
+
+.options-list-item:hover, .md-list-cell:hover {
+    -fx-background-color: -fsl2-card-hover;
+}
+
+.title-label {
+    -fx-text-fill: -fsl2-text;
+}
+
+.subtitle-label {
+    -fx-text-fill: -fsl2-muted;
+}
+
+/* Buttons: solid purple for the main action, outline for the rest */
+.jfx-button-raised, .dialog-accept {
+    -fx-background-color: -fsl2-primary;
+    -fx-text-fill: -fsl2-on-primary;
+    -fx-background-radius: 10;
+    -fx-font-weight: bold;
+}
+
+.jfx-button-raised:hover, .dialog-accept:hover {
+    -fx-background-color: -fsl2-primary-hover;
+}
+
+.jfx-button-raised .svg {
+    -fx-fill: -fsl2-on-primary;
+}
+
+.dialog-cancel {
+    -fx-text-fill: -fsl2-text;
+    -fx-border-color: -fsl2-border;
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+}
+
+/* Text inputs and combo boxes */
+.jfx-text-field, .jfx-password-field, .jfx-combo-box {
+    -fx-text-fill: -fsl2-text;
+    -fx-prompt-text-fill: -fsl2-muted;
+    -jfx-focus-color: -fsl2-primary;
+    -jfx-unfocus-color: -fsl2-border;
+}
+
+/* Dialogs */
+.jfx-dialog-layout {
+    -fx-background-color: -fsl2-card;
+    -fx-background-radius: 18;
+}
+
+.jfx-snackbar-content {
+    -fx-background-color: -fsl2-card;
+    -fx-border-color: -fsl2-primary;
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+}
+
+.jfx-snackbar-toast {
+    -fx-text-fill: -fsl2-text;
+}
+
+/* Progress, sliders, toggles */
+.jfx-progress-bar > .bar {
+    -fx-background-color: linear-gradient(to right, -fsl2-primary, -fsl2-mint);
+}
+
+.jfx-slider .thumb, .jfx-slider .colored-track {
+    -fx-background-color: -fsl2-primary;
+}
+
+.jfx-toggle-button {
+    -jfx-toggle-color: -fsl2-primary;
+    -jfx-toggle-line-color: rgba(167, 139, 250, 0.45);
+    -jfx-untoggle-color: -fsl2-muted;
+    -jfx-untoggle-line-color: -fsl2-border;
+}
+
+/* Scrollbars: slim, low-contrast until hovered */
+.scroll-bar .thumb {
+    -fx-background-color: rgba(167, 139, 250, 0.28);
+    -fx-background-radius: 99;
+}
+
+.scroll-bar .thumb:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.55);
+}
+
+/* Sub-navigation lists inside pages (settings, download, instance) */
+.advanced-list-item:selected > .rippler-container > .container {
+    -fx-background-color: rgba(167, 139, 250, 0.16);
+    -fx-border-color: transparent transparent transparent -fsl2-primary;
+}
+
+.gray-background {
+    -fx-background-color: transparent;
+}
