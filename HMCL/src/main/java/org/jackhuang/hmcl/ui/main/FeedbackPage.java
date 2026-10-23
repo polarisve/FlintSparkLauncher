@@ -50,7 +50,7 @@ public class FeedbackPage extends SpinnerPane {
             users.setTitle(i18n("contact.chat.qq_group"));
             users.setSubtitle(i18n("contact.chat.qq_group.statement"));
 
-            var discord = LineButton.createExternalLinkButton("https://discord.gg/jVvC7HfM6U");
+            var discord = LineButton.createExternalLinkButton("https://discord.gg/PSKcqrQZKP");
             discord.setLargeTitle(true);
             discord.setLeading(FXUtils.newBuiltinImage("/assets/img/discord.png"));
             discord.setTitle(i18n("contact.chat.discord"));
