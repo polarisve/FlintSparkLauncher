@@ -55,6 +55,8 @@ public final class FslTopBar extends HBox {
         search.getStyleClass().add("fsl-search");
         search.setPromptText(searchPrompt);
         search.setAccessibleText(searchPrompt);
+        // Clicking still focuses it; this only stops it grabbing focus when the window opens
+        search.setFocusTraversable(false);
         search.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ENTER) {
                 String query = search.getText().trim();
