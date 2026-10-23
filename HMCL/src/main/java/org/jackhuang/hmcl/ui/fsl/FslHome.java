@@ -74,7 +74,7 @@ public final class FslHome {
 
         Label instanceLabel = Fsl.muted(i18n("fsl.home.current"));
         Label instanceName = Fsl.title("");
-        instanceName.setStyle("-fx-font-size: 20px;");
+        instanceName.setStyle("-fx-font-size: 15px;");
         Label state = Fsl.chip(i18n("fsl.home.ready.chip"));
         HBox nameRow = new HBox(8, instanceName, state);
         nameRow.setAlignment(Pos.CENTER_LEFT);
@@ -92,15 +92,15 @@ public final class FslHome {
                 Controllers.navigate(Controllers.getGameListPage());
             }
         });
-        HBox actions = new HBox(10, download, instances, folder);
+        HBox actions = new HBox(8, download, instances, folder);
         actions.setAlignment(Pos.CENTER_LEFT);
 
         VBox card = Fsl.card();
         card.getStyleClass().add("fsl-card-hero");
         card.getChildren().addAll(instanceLabel, nameRow, subtitle, actions);
-        card.setMaxWidth(560);
+        card.setMaxWidth(440);
 
-        VBox hero = new VBox(14, heading, card);
+        VBox hero = new VBox(10, heading, card);
         hero.setPickOnBounds(false);
         hero.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         StackPane.setAlignment(hero, Pos.TOP_LEFT);

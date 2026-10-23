@@ -73,8 +73,8 @@ public final class Fsl {
         Button button = new Button(text);
         button.getStyleClass().setAll("fsl-btn", kind.styleClass);
         if (icon != null) {
-            button.setGraphic(icon.createIcon(18));
-            button.setGraphicTextGap(8);
+            button.setGraphic(icon.createIcon(15));
+            button.setGraphicTextGap(6);
         }
         FslMotion.installPressFeedback(button);
         return button;
@@ -137,7 +137,7 @@ public final class Fsl {
         ProgressBar bar = new ProgressBar(progress);
         bar.getStyleClass().add("fsl-progress");
         bar.setMaxWidth(Double.MAX_VALUE);
-        bar.setPrefHeight(6);
+        bar.setPrefHeight(4);
         return bar;
     }
 

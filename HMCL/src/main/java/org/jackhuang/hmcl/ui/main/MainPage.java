@@ -324,7 +324,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
 
         // FSL: hero block with the selected instance, and glowing launch button
         VBox hero = FslHome.createHero(currentGameProperty());
-        StackPane.setMargin(hero, new Insets(24, 24, 0, 28));
+        StackPane.setMargin(hero, new Insets(16, 16, 0, 20));
         FslHome.installLaunchEffects(launchPane);
 
         getChildren().addAll(hero, updatePane, launchPane);

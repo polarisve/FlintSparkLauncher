@@ -53,7 +53,7 @@ public final class FslRail<K> extends StackPane {
     private static final PseudoClass SELECTED = PseudoClass.getPseudoClass("selected");
 
     /// Height of the sliding indicator bar.
-    private static final double INDICATOR_HEIGHT = 22;
+    private static final double INDICATOR_HEIGHT = 16;
 
     /// Column holding the logo, the top items, a spacer and the bottom items.
     private final VBox column = new VBox();
@@ -86,7 +86,7 @@ public final class FslRail<K> extends StackPane {
         column.getStyleClass().add("fsl-rail");
         StackPane logo = new StackPane(new Label("FSL"));
         logo.getStyleClass().add("fsl-rail-logo");
-        VBox.setMargin(logo, new javafx.geometry.Insets(0, 0, 12, 0));
+        VBox.setMargin(logo, new javafx.geometry.Insets(0, 0, 8, 0));
         VBox.setVgrow(spacer, Priority.ALWAYS);
         column.getChildren().addAll(logo, spacer);
 
@@ -127,7 +127,7 @@ public final class FslRail<K> extends StackPane {
     }
 
     private VBox createItem(K key, SVG icon, String text) {
-        VBox item = new VBox(icon.createIcon(22), new Label(text));
+        VBox item = new VBox(icon.createIcon(18), new Label(text));
         item.getStyleClass().add("fsl-rail-item");
         item.setFocusTraversable(true);
         item.setAccessibleRole(AccessibleRole.BUTTON);
@@ -185,7 +185,7 @@ public final class FslRail<K> extends StackPane {
 
         Bounds bounds = overlay.sceneToLocal(item.localToScene(item.getLayoutBounds()));
         double targetY = bounds.getMinY() + (bounds.getHeight() - INDICATOR_HEIGHT) / 2;
-        indicator.setLayoutX(bounds.getMinX() - 8);
+        indicator.setLayoutX(bounds.getMinX() - 6);
 
         if (slide != null) {
             slide.stop();
