@@ -41,6 +41,11 @@ import javafx.util.Duration;
 import org.jackhuang.hmcl.game.HMCLGameInstance;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.animation.AnimationUtils;
+import javafx.scene.control.Button;
+import javafx.scene.layout.HBox;
+import org.jackhuang.hmcl.ui.Controllers;
+import org.jackhuang.hmcl.ui.SVG;
+import org.jackhuang.hmcl.ui.fsl.ds.Fsl;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
 
@@ -61,35 +66,51 @@ public final class FslHome {
     /// @param currentGame the currently selected game instance, or `null` when there is none
     /// @return the hero node, already aligned for a [StackPane]
     public static VBox createHero(ObservableValue<@Nullable HMCLGameInstance> currentGame) {
-        Label tag = new Label("FLINT SPARK LAUNCHER");
-        tag.getStyleClass().add("fsl-hero-tag");
+        int hour = java.time.LocalTime.now().getHour();
+        String greeting = i18n(hour < 6 ? "fsl.home.greet.night" : hour < 12 ? "fsl.home.greet.morning"
+                : hour < 18 ? "fsl.home.greet.afternoon" : "fsl.home.greet.evening");
+        Label heading = Fsl.heading(greeting);
+        Label subtitle = Fsl.muted("");
 
-        Label title = new Label();
-        title.getStyleClass().add("fsl-hero-title");
+        Label instanceLabel = Fsl.muted(i18n("fsl.home.current"));
+        Label instanceName = Fsl.title("");
+        instanceName.setStyle("-fx-font-size: 20px;");
+        Label state = Fsl.chip(i18n("fsl.home.ready.chip"));
+        HBox nameRow = new HBox(8, instanceName, state);
+        nameRow.setAlignment(Pos.CENTER_LEFT);
 
-        Label subtitle = new Label();
-        subtitle.getStyleClass().add("fsl-hero-subtitle");
+        Button download = Fsl.button(i18n("fsl.home.action.download"), SVG.DOWNLOAD, Fsl.ButtonKind.SECONDARY);
+        download.setOnAction(e -> Controllers.navigate(Controllers.getDownloadPage()));
+        Button instances = Fsl.button(i18n("fsl.home.action.instances"), SVG.DEPLOYED_CODE, Fsl.ButtonKind.SECONDARY);
+        instances.setOnAction(e -> Controllers.navigate(Controllers.getGameListPage()));
+        Button folder = Fsl.button(i18n("fsl.home.action.settings"), SVG.SETTINGS, Fsl.ButtonKind.GHOST);
+        folder.setOnAction(e -> {
+            @Nullable HMCLGameInstance game = currentGame.getValue();
+            if (game != null) {
+                org.jackhuang.hmcl.ui.instances.Instances.modifyGameSettings(game);
+            } else {
+                Controllers.navigate(Controllers.getGameListPage());
+            }
+        });
+        HBox actions = new HBox(10, download, instances, folder);
+        actions.setAlignment(Pos.CENTER_LEFT);
 
-        VBox hero = new VBox(4, tag, title, subtitle);
-        hero.getStyleClass().add("fsl-hero");
+        VBox card = Fsl.card();
+        card.getStyleClass().add("fsl-card-hero");
+        card.getChildren().addAll(instanceLabel, nameRow, subtitle, actions);
+        card.setMaxWidth(560);
+
+        VBox hero = new VBox(14, heading, card);
         hero.setPickOnBounds(false);
         hero.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
-        StackPane.setAlignment(hero, Pos.BOTTOM_LEFT);
+        StackPane.setAlignment(hero, Pos.TOP_LEFT);
 
         FXUtils.onChangeAndOperate(currentGame, game -> {
-            if (game == null) {
-                title.setText(i18n("fsl.home.no_instance"));
-                subtitle.setText(i18n("fsl.home.no_instance.subtitle"));
-            } else {
-                title.setText(game.getId().toString());
-                subtitle.setText(i18n("fsl.home.ready"));
-            }
-            if (AnimationUtils.isAnimationEnabled() && hero.getScene() != null) {
-                FadeTransition fade = new FadeTransition(Duration.millis(260), title);
-                fade.setFromValue(0.2);
-                fade.setToValue(1);
-                fade.play();
-            }
+            boolean has = game != null;
+            instanceName.setText(has ? game.getId().toString() : i18n("fsl.home.no_instance"));
+            subtitle.setText(i18n(has ? "fsl.home.ready" : "fsl.home.no_instance.subtitle"));
+            state.setVisible(has);
+            folder.setDisable(!has);
         });
 
         playEntranceOnce(hero);
