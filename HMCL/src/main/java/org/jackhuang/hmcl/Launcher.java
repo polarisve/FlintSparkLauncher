@@ -34,6 +34,7 @@ import javafx.scene.control.ButtonType;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import org.jackhuang.hmcl.game.FslOfficialLauncherSync;
 import org.jackhuang.hmcl.game.HMCLCacheRepository;
 import org.jackhuang.hmcl.setting.*;
 import org.jackhuang.hmcl.task.AsyncTaskExecutor;
@@ -157,6 +158,8 @@ public final class Launcher extends Application {
         ProxyManager.init();
         Accounts.init();
         GameDirectoryManager.init();
+        // FSL: list versions installed by FSL in the official launcher too
+        FslOfficialLauncherSync.install();
         AuthlibInjectorServers.init();
         AnimationUtils.init();
 
