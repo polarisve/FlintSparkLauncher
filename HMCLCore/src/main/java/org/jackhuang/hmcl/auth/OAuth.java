@@ -98,6 +98,7 @@ public class OAuth {
             String code = session.waitFor();
 
             // Authorization Code -> Token
+            options.callback.onLoginStage(LoginStage.TOKEN);
             AuthorizationResponse response = HttpRequest.POST(accessTokenURL)
                     .form(pair("client_id", options.callback.getClientId()),
                             pair("code", code),
@@ -161,6 +162,7 @@ public class OAuth {
             }
 
             options.callback.loginCompletedDeviceCode();
+            options.callback.onLoginStage(LoginStage.TOKEN);
 
             return new Result(tokenResponse.accessToken, tokenResponse.refreshToken);
         }
@@ -281,6 +283,28 @@ public class OAuth {
         void openBrowser(GrantFlow grantFlow, String url) throws IOException;
 
         String getClientId();
+
+        /// FSL: reports which step of an interactive login is running, so the UI can show progress.
+        ///
+        /// @param stage the step that is starting
+        default void onLoginStage(LoginStage stage) {
+        }
+    }
+
+    /// FSL: steps of an interactive Microsoft login after the user has signed in.
+    public enum LoginStage {
+        /// Exchanging the authorization code for Microsoft tokens.
+        TOKEN,
+        /// Signing in to Xbox Live.
+        XBOX,
+        /// Requesting the Xbox security token for Minecraft.
+        XSTS,
+        /// Signing in to Minecraft services.
+        MINECRAFT,
+        /// Checking Minecraft ownership.
+        ENTITLEMENT,
+        /// Fetching the Minecraft profile.
+        PROFILE,
     }
 
     public enum GrantFlow {

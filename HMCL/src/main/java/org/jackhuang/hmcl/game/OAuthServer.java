@@ -23,10 +23,12 @@ import org.jackhuang.hmcl.auth.OAuth;
 import org.jackhuang.hmcl.event.Event;
 import org.jackhuang.hmcl.event.EventManager;
 import org.jackhuang.hmcl.theme.Themes;
+import org.jackhuang.hmcl.util.FslWebComponent;
 import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.io.IOUtils;
 import org.jackhuang.hmcl.util.io.JarUtils;
 import org.jackhuang.hmcl.util.io.NetworkUtils;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.security.SecureRandom;
@@ -36,6 +38,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.jackhuang.hmcl.util.Lang.mapOf;
 import static org.jackhuang.hmcl.util.Lang.thread;
@@ -178,11 +181,33 @@ public final class OAuthServer extends NanoHTTPD implements OAuth.Session {
         public final EventManager<LoginCompletedDeviceCodeEvent> onLoginCompletedDeviceCode = new EventManager<>();
         public final EventManager<OpenBrowserEvent> onOpenBrowserAuthorizationCode = new EventManager<>();
         public final EventManager<OpenBrowserEvent> onOpenBrowserDevice = new EventManager<>();
+        /// FSL: fired when a step of the login (token exchange, Xbox, Minecraft...) starts.
+        public final EventManager<LoginStageEvent> onLoginStage = new EventManager<>();
+
+        /// FSL: when the previous login stage started, in nanoseconds, used for timing logs.
+        private volatile long lastStageStart;
+
+        /// FSL: the previous login stage, or `null` before the first one.
+        private volatile OAuth.@Nullable LoginStage lastStage;
+
+        /// FSL: the pending embedded-login session, or `null` when none is in progress.
+        private final AtomicReference<@Nullable NativeClientOAuthSession> nativeSession = new AtomicReference<>();
 
         @Override
         public OAuth.Session startServer() throws IOException, AuthenticationException {
             if (StringUtils.isBlank(getClientId())) {
                 throw new MicrosoftAuthenticationNotSupportedException();
+            }
+
+            // FSL: with javafx.web available, log in through the embedded window and the
+            // native client redirect URI instead of a localhost callback server
+            if (FslWebComponent.isLoaded()) {
+                NativeClientOAuthSession session = new NativeClientOAuthSession(closed -> nativeSession.compareAndSet(closed, null));
+                @Nullable NativeClientOAuthSession previous = nativeSession.getAndSet(session);
+                if (previous != null) {
+                    previous.close();
+                }
+                return session;
             }
 
             IOException exception = null;
@@ -204,6 +229,19 @@ public final class OAuthServer extends NanoHTTPD implements OAuth.Session {
         }
 
         @Override
+        public void onLoginStage(OAuth.LoginStage stage) {
+            long now = System.nanoTime();
+            OAuth.@Nullable LoginStage previous = lastStage;
+            if (previous != null && stage.ordinal() > previous.ordinal()) {
+                LOG.info("Microsoft login stage " + previous + " took " + (now - lastStageStart) / 1_000_000 + " ms");
+            }
+            lastStage = stage;
+            lastStageStart = now;
+            LOG.info("Microsoft login stage: " + stage);
+            onLoginStage.fireEvent(new LoginStageEvent(this, stage));
+        }
+
+        @Override
         public void loginCompletedDeviceCode() {
             onLoginCompletedDeviceCode.fireEvent(new LoginCompletedDeviceCodeEvent(this));
         }
@@ -215,6 +253,21 @@ public final class OAuthServer extends NanoHTTPD implements OAuth.Session {
             switch (grantFlow) {
                 case AUTHORIZATION_CODE -> onOpenBrowserAuthorizationCode.fireEvent(new OpenBrowserEvent(this, url));
                 case DEVICE -> onOpenBrowserDevice.fireEvent(new OpenBrowserEvent(this, url));
+            }
+        }
+
+        /// FSL: returns the pending embedded-login session, if any.
+        ///
+        /// @return the session waiting for the embedded window's redirect, or `null`
+        public @Nullable NativeClientOAuthSession getNativeSession() {
+            return nativeSession.get();
+        }
+
+        /// FSL: abandons the pending embedded-login session, if any.
+        public void cancelNativeSession() {
+            @Nullable NativeClientOAuthSession session = nativeSession.getAndSet(null);
+            if (session != null) {
+                session.close();
             }
         }
 
@@ -247,6 +300,26 @@ public final class OAuthServer extends NanoHTTPD implements OAuth.Session {
     public static class LoginCompletedDeviceCodeEvent extends Event {
         public LoginCompletedDeviceCodeEvent(Object source) {
             super(source);
+        }
+    }
+
+    /// FSL: event carrying the login step that just started.
+    public static class LoginStageEvent extends Event {
+        /// The step that just started.
+        private final OAuth.LoginStage stage;
+
+        /// Creates the event.
+        ///
+        /// @param source the event source
+        /// @param stage  the step that just started
+        public LoginStageEvent(Object source, OAuth.LoginStage stage) {
+            super(source);
+            this.stage = stage;
+        }
+
+        /// Returns the step that just started.
+        public OAuth.LoginStage getStage() {
+            return stage;
         }
     }
 
