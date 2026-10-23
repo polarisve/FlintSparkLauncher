@@ -110,101 +110,11 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
         protected Skin(RootPage control) {
             super(control);
 
-            // first item in left sidebar
-            AccountAdvancedListItem accountListItem = new AccountAdvancedListItem();
-            accountListItem.setOnAction(e -> Controllers.navigate(Controllers.getAccountListPage()));
-            FXUtils.onSecondaryButtonClicked(accountListItem, () -> AccountListPopupMenu.show(accountListItem, JFXPopup.PopupVPosition.TOP, JFXPopup.PopupHPosition.LEFT, accountListItem.getWidth(), 0));
-            accountListItem.accountProperty().bind(Accounts.selectedAccountProperty());
-
-            // second item in left sidebar
-            GameAdvancedListItem gameListItem = new GameAdvancedListItem();
-            gameListItem.setOnAction(e -> {
-                @Nullable HMCLGameInstance instance = GameDirectoryManager.getSelectedRepository().getSelectedInstance();
-                if (instance == null) {
-                    Controllers.navigate(Controllers.getGameListPage());
-                } else {
-                    Instances.modifyGameSettings(instance);
-                }
-            });
-            FXUtils.onScroll(gameListItem, getSkinnable().getMainPage().getInstances(), list -> {
-                @Nullable HMCLGameInstance currentGame = getSkinnable().getMainPage().getCurrentGame();
-                @Nullable GameInstanceID currentId = currentGame != null ? currentGame.getId() : null;
-                return Lang.indexWhere(list, instance -> instance.getId().equals(currentId));
-            }, instance -> instance.getRepository().setSelectedInstance(instance));
-            if (AnimationUtils.isAnimationEnabled()) {
-                FXUtils.prepareOnMouseEnter(gameListItem, Controllers::prepareGameInstancePage);
-            }
-            FXUtils.onSecondaryButtonClicked(gameListItem, () -> showGameListPopupMenu(gameListItem));
-
-            // third item in left sidebar
-            AdvancedListItem gameItem = new AdvancedListItem();
-            gameItem.setLeftIcon(SVG.FORMAT_LIST_BULLETED);
-            gameItem.setTitle(i18n("instance.manage"));
-            gameItem.setOnAction(e -> Controllers.navigate(Controllers.getGameListPage()));
-            FXUtils.onSecondaryButtonClicked(gameItem, () -> showGameListPopupMenu(gameItem));
-
-            // forth item in left sidebar
-            AdvancedListItem downloadItem = new AdvancedListItem();
-            downloadItem.setLeftIcon(SVG.DOWNLOAD);
-            downloadItem.setTitle(i18n("download"));
-            downloadItem.setOnAction(e -> Controllers.navigate(Controllers.getDownloadPage()));
-            if (AnimationUtils.isAnimationEnabled()) {
-                FXUtils.prepareOnMouseEnter(downloadItem, Controllers::prepareDownloadPage);
-            }
-
-            // fifth item in left sidebar
-            AdvancedListItem launcherSettingsItem = new AdvancedListItem();
-            launcherSettingsItem.setLeftIcon(SVG.SETTINGS);
-            launcherSettingsItem.setTitle(i18n("settings"));
-            launcherSettingsItem.setOnAction(e -> {
-                Controllers.getSettingsPage().showGameSettings(GameDirectoryManager.getSelectedRepository());
-                Controllers.navigate(Controllers.getSettingsPage());
-            });
-            if (AnimationUtils.isAnimationEnabled()) {
-                FXUtils.prepareOnMouseEnter(launcherSettingsItem, Controllers::prepareSettingsPage);
-            }
-
-            // sixth item in left sidebar
-            AdvancedListItem terracottaItem = new AdvancedListItem();
-            terracottaItem.setLeftIcon(SVG.GRAPH2);
-            terracottaItem.setTitle(i18n("terracotta"));
-            terracottaItem.setOnAction(e -> {
-                if (TerracottaMetadata.PROVIDER != null) {
-                    Controllers.navigate(Controllers.getTerracottaPage());
-                } else {
-                    String message;
-                    if (Architecture.SYSTEM_ARCH.getBits() == Bits.BIT_32)
-                        message = i18n("terracotta.unsupported.arch.32bit");
-                    else if (OperatingSystem.CURRENT_OS == OperatingSystem.WINDOWS
-                            && !OperatingSystem.SYSTEM_VERSION.isAtLeast(OSVersion.WINDOWS_10))
-                        message = i18n("terracotta.unsupported.os.windows.old");
-                    else if (Platform.SYSTEM_PLATFORM.equals(OperatingSystem.LINUX, Architecture.LOONGARCH64_OW))
-                        message = i18n("terracotta.unsupported.arch.loongarch64_ow");
-                    else
-                        message = i18n("terracotta.unsupported");
-
-                    Controllers.dialog(message, null, MessageDialogPane.MessageType.WARNING);
-                }
-            });
-
-            // the left sidebar
-            AdvancedListBox sideBar = new AdvancedListBox()
-                    .startCategory(i18n("account").toUpperCase(Locale.ROOT))
-                    .add(accountListItem)
-                    .startCategory(i18n("instance").toUpperCase(Locale.ROOT))
-                    .add(gameListItem)
-                    .add(gameItem)
-                    .add(downloadItem)
-                    .startCategory(i18n("settings.launcher.general").toUpperCase(Locale.ROOT))
-                    .add(launcherSettingsItem)
-                    .add(terracottaItem)
-                    .addNavigationDrawerItem(i18n("contact.chat"), SVG.CHAT, () -> {
-                        Controllers.getSettingsPage().showFeedback();
-                        Controllers.navigate(Controllers.getSettingsPage());
-                    });
+            // FSL: navigation moved to the window-wide rail (FslNavigationRail); no sidebar here
+            FXUtils.setLimitWidth(getSkinnable().getLeft(), 0);
+            getSkinnable().getLeft().setVisible(false);
 
             // the root page, with the sidebar in left, navigator in center.
-            setLeft(sideBar);
             setCenter(getSkinnable().getMainPage());
         }
 

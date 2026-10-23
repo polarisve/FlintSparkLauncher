@@ -50,7 +50,9 @@ public final class StyleSheets {
                 getBrightnessStyleSheet(),
                 "/assets/css/root.css",
                 // FSL visual layer, must stay after root.css so it overrides it
-                "/assets/css/fsl.css"
+                "/assets/css/fsl.css",
+                // FSL design system v2 (new shell and fsl-* components)
+                "/assets/css/fsl-ui.css"
         };
         stylesheets = FXCollections.observableList(Arrays.asList(array));
 

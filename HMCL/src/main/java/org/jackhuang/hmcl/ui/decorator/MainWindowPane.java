@@ -17,6 +17,9 @@
  */
 package org.jackhuang.hmcl.ui.decorator;
 
+import org.jackhuang.hmcl.ui.construct.Navigator;
+import org.jackhuang.hmcl.ui.fsl.FslNavigationRail;
+
 import com.jfoenix.controls.JFXButton;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
@@ -137,7 +140,13 @@ final class MainWindowPane extends StackPane {
 
         decorator.capableDraggingWindow(titleBar);
 
-        getChildren().setAll(backgroundNode, frame);
+        // FSL: the navigation rail runs the full height on the left, next to the title bar and content
+        FslNavigationRail rail = new FslNavigationRail(() -> decorator.getNavigator().clear());
+        decorator.getNavigator().addEventHandler(Navigator.NavigationEvent.NAVIGATED, event -> rail.sync(event.getNode()));
+        BorderPane shell = new BorderPane(frame);
+        shell.setLeft(rail);
+
+        getChildren().setAll(backgroundNode, shell);
     }
 
     /// Moves the custom title bar into or out of the native dragging header.
