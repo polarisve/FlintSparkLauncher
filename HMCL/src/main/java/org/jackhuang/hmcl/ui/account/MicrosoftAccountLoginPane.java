@@ -19,6 +19,7 @@ package org.jackhuang.hmcl.ui.account;
 
 import com.jfoenix.controls.JFXButton;
 import com.jfoenix.controls.JFXDialogLayout;
+import com.jfoenix.controls.JFXProgressBar;
 import com.jfoenix.controls.JFXSpinner;
 import io.nayuki.qrcodegen.QrCode;
 import javafx.application.Platform;
@@ -37,6 +38,7 @@ import org.jackhuang.hmcl.auth.AuthenticationException;
 import org.jackhuang.hmcl.auth.OAuth;
 import org.jackhuang.hmcl.auth.microsoft.MicrosoftAccount;
 import org.jackhuang.hmcl.auth.yggdrasil.YggdrasilService;
+import org.jackhuang.hmcl.game.NativeClientOAuthSession;
 import org.jackhuang.hmcl.setting.Accounts;
 import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
@@ -47,9 +49,13 @@ import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.WeakListenerHolder;
 import org.jackhuang.hmcl.ui.construct.*;
 import org.jackhuang.hmcl.upgrade.IntegrityChecker;
+import org.jackhuang.hmcl.util.FslWebComponent;
 import org.jackhuang.hmcl.util.QrCodeUtils;
 import org.jackhuang.hmcl.util.StringUtils;
+import org.jackhuang.hmcl.util.i18n.I18n;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.function.Consumer;
@@ -57,6 +63,7 @@ import java.util.function.Consumer;
 import static org.jackhuang.hmcl.setting.SettingsManager.settings;
 import static org.jackhuang.hmcl.ui.FXUtils.onEscPressed;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
+import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
 public class MicrosoftAccountLoginPane extends JFXDialogLayout implements DialogAware {
     private final Account accountToRelogin;
@@ -128,6 +135,16 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
                 step.set(new Step.DeviceLoginCompleted());
         }));
 
+        // FSL: after the user signs in, show which verification step is running
+        holder.registerWeak(Accounts.OAUTH_CALLBACK.onLoginStage, event -> Platform.runLater(() -> {
+            Step current = step.get();
+            if (current instanceof Step.WaitForOpenBrowser
+                    || current instanceof Step.DeviceLoginCompleted
+                    || current instanceof Step.Verifying) {
+                step.set(new Step.Verifying(event.getStage()));
+            }
+        }));
+
         this.step.set(Accounts.OAUTH_CALLBACK.getClientId().isEmpty()
                 ? new Step.Init()
                 : new Step.StartAuthorizationCodeLogin());
@@ -169,6 +186,33 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
 
             rootContainer.getChildren().add(new JFXSpinner());
 
+            // FSL: the embedded login window needs javafx.web, which is downloaded on first use
+            if (!FslWebComponent.isLoaded() && FslWebComponent.isSupported()) {
+                // Keep "Log in" unavailable until the login window can actually be opened
+                loginButtonSpinner.setLoading(true);
+
+                var hintPane = new HintPane(MessageDialogPane.MessageType.INFO);
+                hintPane.setText(i18n("account.methods.microsoft.methods.embedded.preparing"));
+                rootContainer.getChildren().add(hintPane);
+
+                browserTaskExecutor = FslWebComponent.getInstallTask()
+                        .whenComplete(Schedulers.javafx(), exception -> {
+                            if (!(this.step.get() instanceof Step.StartAuthorizationCodeLogin)) {
+                                return;
+                            }
+                            if (exception == null) {
+                                this.step.set(new Step.StartAuthorizationCodeLogin());
+                            } else if (!(exception instanceof CancellationException)) {
+                                LOG.warning("Failed to prepare the embedded Microsoft login", exception);
+                                this.step.set(new Step.LoginFailed(i18n("account.methods.microsoft.methods.embedded.failed")
+                                        + "\n" + I18n.localizeErrorMessage(exception)));
+                            }
+                        })
+                        .executor(true);
+                setBody(rootContainer);
+                return;
+            }
+
             browserTaskExecutor = Task.supplyAsync(() -> Accounts.FACTORY_MICROSOFT.create(null, null, null, null, OAuth.GrantFlow.AUTHORIZATION_CODE))
                     .whenComplete(Schedulers.javafx(), this::onLoginCompleted)
                     .executor(true);
@@ -182,19 +226,38 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
                     .whenComplete(Schedulers.javafx(), this::onLoginCompleted)
                     .executor(true);
         } else if (currentStep instanceof Step.WaitForOpenBrowser wait) {
-            btnLogin.setOnAction(e -> {
-                FXUtils.openLink(wait.url());
-                loginButtonSpinner.setLoading(true);
-            });
-            loginButtonSpinner.setLoading(false);
+            @Nullable NativeClientOAuthSession nativeSession = Accounts.OAUTH_CALLBACK.getNativeSession();
+            if (nativeSession != null) {
+                // FSL: like the browser flow, the login window opens only when "Log in" is clicked
+                // The button spins while the window is open, and stops if the window is closed early
+                btnLogin.setOnAction(e -> {
+                    loginButtonSpinner.setLoading(true);
+                    FslMicrosoftLoginWindow.show(nativeSession, wait.url(), () -> {
+                        if (this.step.get() == currentStep) {
+                            loginButtonSpinner.setLoading(false);
+                        }
+                    });
+                });
+                loginButtonSpinner.setLoading(false);
 
-            HintPane hintPane = new HintPane(MessageDialogPane.MessageType.INFO);
-            hintPane.setSegment(
-                    i18n("account.methods.microsoft.methods.browser.hint", StringUtils.escapeXmlAttribute(wait.url()), wait.url()),
-                    FXUtils::copyText
-            );
+                HintPane hintPane = new HintPane(MessageDialogPane.MessageType.INFO);
+                hintPane.setText(i18n("account.methods.microsoft.methods.embedded.hint"));
+                rootContainer.getChildren().add(hintPane);
+            } else {
+                btnLogin.setOnAction(e -> {
+                    FXUtils.openLink(wait.url());
+                    loginButtonSpinner.setLoading(true);
+                });
+                loginButtonSpinner.setLoading(false);
 
-            rootContainer.getChildren().add(hintPane);
+                HintPane hintPane = new HintPane(MessageDialogPane.MessageType.INFO);
+                hintPane.setSegment(
+                        i18n("account.methods.microsoft.methods.browser.hint", StringUtils.escapeXmlAttribute(wait.url()), wait.url()),
+                        FXUtils::copyText
+                );
+
+                rootContainer.getChildren().add(hintPane);
+            }
         } else if (currentStep instanceof Step.WaitForScanQrCode wait) {
             loginButtonSpinner.setLoading(true);
 
@@ -250,6 +313,30 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
             hintPane.setSegment(i18n("account.methods.microsoft.methods.device.hint.completed"));
 
             rootContainer.getChildren().addAll(hintPane);
+        } else if (currentStep instanceof Step.Verifying verifying) {
+            // FSL: signed in to Microsoft; the launcher is now verifying the account step by step
+            loginButtonSpinner.setLoading(true);
+            if (FslWebComponent.isLoaded()) FslMicrosoftLoginWindow.close();
+
+            int total = OAuth.LoginStage.values().length;
+            int index = verifying.stage().ordinal() + 1;
+
+            var title = new Label(i18n("account.methods.microsoft.stage.title", index, total));
+            title.getStyleClass().add("subtitle-label");
+
+            var stageLabel = new Label(i18n("account.methods.microsoft.stage." + verifying.stage().name().toLowerCase(Locale.ROOT)));
+
+            var progress = new JFXProgressBar((double) (index - 1) / total);
+            progress.setMaxWidth(Double.MAX_VALUE);
+
+            var row = new HBox(10, new JFXSpinner(), stageLabel);
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.getChildren().get(0).getStyleClass().add("small-spinner");
+
+            var box = new VBox(10, title, row, progress);
+            box.setAlignment(Pos.CENTER_LEFT);
+            box.setMaxWidth(Double.MAX_VALUE);
+            rootContainer.getChildren().add(box);
         } else if (currentStep instanceof Step.LoginFailed failed) {
             btnLogin.setOnAction(e -> this.step.set(new Step.StartAuthorizationCodeLogin()));
             loginButtonSpinner.setLoading(false);
@@ -288,6 +375,9 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
     private void cancelAllTasks() {
         if (browserTaskExecutor != null) browserTaskExecutor.cancel();
         if (deviceTaskExecutor != null) deviceTaskExecutor.cancel();
+        // FSL: unblock a login waiting for the embedded window and close that window
+        Accounts.OAUTH_CALLBACK.cancelNativeSession();
+        if (FslWebComponent.isLoaded()) FslMicrosoftLoginWindow.close();
     }
 
     private void onCancel() {
@@ -297,6 +387,7 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
     }
 
     private void onLoginCompleted(MicrosoftAccount account, Exception exception) {
+        if (FslWebComponent.isLoaded()) FslMicrosoftLoginWindow.close();
         if (exception == null) {
             boolean storageReadOnly = accountToRelogin != null
                     ? Accounts.isAccountFilesReadOnly(accountToRelogin)
@@ -338,6 +429,8 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
             }
         }
         fireEvent(new DialogCloseEvent());
+        // FSL: make it obvious the account was added
+        Controllers.showToast(i18n("account.methods.microsoft.added", account.getProfileName()));
     }
 
     private sealed interface Step {
@@ -363,6 +456,10 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
         }
 
         record LoginFailed(String message) implements Step {
+        }
+
+        /// FSL: signed in to Microsoft, verifying the account; `stage` is the step in progress.
+        record Verifying(OAuth.LoginStage stage) implements Step {
         }
     }
 

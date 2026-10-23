@@ -120,6 +120,7 @@ public class MicrosoftService {
         XBoxLiveAuthenticationResponse xboxResponse, minecraftXstsResponse;
         try {
             // Authenticate with XBox Live
+            callback.onLoginStage(OAuth.LoginStage.XBOX);
             xboxResponse = HttpRequest
                     .POST("https://user.auth.xboxlive.com/user/authenticate")
                     .json(mapOf(
@@ -133,6 +134,7 @@ public class MicrosoftService {
 
             uhs = getUhs(xboxResponse, null);
 
+            callback.onLoginStage(OAuth.LoginStage.XSTS);
             minecraftXstsResponse = HttpRequest
                     .POST("https://xsts.auth.xboxlive.com/xsts/authorize")
                     .json(mapOf(
@@ -154,6 +156,7 @@ public class MicrosoftService {
         getUhs(minecraftXstsResponse, uhs);
 
         // Authenticate with Minecraft
+        callback.onLoginStage(OAuth.LoginStage.MINECRAFT);
         MinecraftLoginWithXBoxResponse minecraftResponse = HttpRequest
                 .POST("https://api.minecraftservices.com/authentication/login_with_xbox")
                 .json(mapOf(pair("identityToken", "XBL3.0 x=" + uhs + ";" + minecraftXstsResponse.token)))
@@ -163,6 +166,7 @@ public class MicrosoftService {
         long notAfter = minecraftResponse.expiresIn * 1000L + System.currentTimeMillis();
 
         // Check MC ownership, this is necessary, see GitHub#2979
+        callback.onLoginStage(OAuth.LoginStage.ENTITLEMENT);
         HttpURLConnection request = HttpRequest.GET("https://api.minecraftservices.com/entitlements/mcstore")
                 .authorization("Bearer " + minecraftResponse.accessToken)
                 .retry(5)
@@ -173,6 +177,7 @@ public class MicrosoftService {
         }
 
         // Get Minecraft Account UUID
+        callback.onLoginStage(OAuth.LoginStage.PROFILE);
         MinecraftProfileResponse profileResponse = getMinecraftProfile(minecraftResponse.tokenType, minecraftResponse.accessToken);
         handleErrorResponse(profileResponse);
 

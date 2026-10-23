@@ -40,6 +40,10 @@ import java.nio.file.Path;
 public final class JavaFXUtils {
     public static final String[] MODULES = {"base", "graphics", "controls"};
 
+    /// FSL: JavaFX modules needed by the embedded Microsoft login window. They are not loaded at
+    /// startup; the launcher downloads them on first use (see `openjfx-web-dependencies.json`).
+    public static final String[] WEB_MODULES = {"web", "media"};
+
     private static void addDependencies(Project rootProject) {
         try {
             Class.forName("javafx.application.Application", false, JavaFXUtils.class.getClassLoader());
@@ -88,6 +92,9 @@ public final class JavaFXUtils {
                         project.getDependencies().add("compileOnly", dependency);
                         project.getDependencies().add("testImplementation", dependency);
                     }
+                    // FSL: compile against javafx.web for the embedded login window
+                    project.getDependencies().add("compileOnly",
+                            String.format("%s:javafx-web:%s:%s", platform.getGroupId(), version, platform.getClassifier()));
                 });
             }
         }
@@ -137,6 +144,75 @@ public final class JavaFXUtils {
         }
     }
 
+    /// Fetches the SHA-1 of a Maven Central artifact.
+    ///
+    /// @return the checksum, or `null` if the artifact does not exist
+    private static String fetchSha1(Task task, String groupId, String artifactId, String version, String classifier) {
+        String shaUrl = String.format("https://repo1.maven.org/maven2/%s/%s/%s/%s-%s-%s.jar.sha1",
+                groupId.replace('.', '/'), artifactId, version, artifactId, version, classifier);
+        task.getLogger().info("Fetching {}", shaUrl);
+        try (InputStream stream = new URI(shaUrl).toURL().openStream()) {
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8).trim();
+        } catch (java.io.FileNotFoundException e) {
+            return null;
+        } catch (IOException | URISyntaxException e) {
+            throw new GradleException("Failed to fetch sha from " + shaUrl, e);
+        }
+    }
+
+    /// FSL: writes `openjfx-web-dependencies.json`, listing javafx.web, javafx.media and (when published
+    /// for that version) jdk.jsobject per platform. Platforms without a published javafx.web are skipped.
+    private static void generateOpenJFXWebDependencies(Task task) {
+        JsonObject dependenciesJson = new JsonObject();
+        JavaFXPlatform.ALL.forEach((name, platform) -> {
+            JsonObject platformJson = new JsonObject();
+            platform.getVersions().forEach((versionType, version) -> {
+                JsonArray modulesJson = new JsonArray();
+
+                for (String module : WEB_MODULES) {
+                    String sha1 = fetchSha1(task, platform.getGroupId(), "javafx-" + module, version, platform.getClassifier());
+                    if (sha1 == null) {
+                        return;
+                    }
+                    JsonObject moduleJson = new JsonObject();
+                    moduleJson.addProperty("module", "javafx." + module);
+                    moduleJson.addProperty("groupId", platform.getGroupId());
+                    moduleJson.addProperty("artifactId", "javafx-" + module);
+                    moduleJson.addProperty("version", version);
+                    moduleJson.addProperty("classifier", platform.getClassifier());
+                    moduleJson.addProperty("sha1", sha1);
+                    modulesJson.add(moduleJson);
+                }
+
+                // Since JavaFX 24, jdk.jsobject ships with JavaFX instead of the JDK
+                String jsobjectSha1 = fetchSha1(task, platform.getGroupId(), "jdk-jsobject", version, platform.getClassifier());
+                if (jsobjectSha1 != null) {
+                    JsonObject moduleJson = new JsonObject();
+                    moduleJson.addProperty("module", "jdk.jsobject");
+                    moduleJson.addProperty("groupId", platform.getGroupId());
+                    moduleJson.addProperty("artifactId", "jdk-jsobject");
+                    moduleJson.addProperty("version", version);
+                    moduleJson.addProperty("classifier", platform.getClassifier());
+                    moduleJson.addProperty("sha1", jsobjectSha1);
+                    modulesJson.add(moduleJson);
+                }
+
+                platformJson.add(versionType.getName(), modulesJson);
+            });
+            if (!platformJson.isEmpty()) {
+                dependenciesJson.add(name, platformJson);
+            }
+        });
+
+        Path outputFile = task.getProject().getRootProject().file("HMCL/src/main/resources/assets/openjfx-web-dependencies.json").toPath().toAbsolutePath().normalize();
+        try {
+            Files.createDirectories(outputFile.getParent());
+            Files.writeString(outputFile, new GsonBuilder().setPrettyPrinting().create().toJson(dependenciesJson));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     private static void preTouchOpenJFXDependencies(Task task) {
         String mirrorRepo = "https://mirrors.cloud.tencent.com/nexus/repository/maven-public";
 
@@ -165,6 +241,7 @@ public final class JavaFXUtils {
         addDependencies(rootProject);
 
         rootProject.getTasks().register("generateOpenJFXDependencies", task -> task.doLast(JavaFXUtils::generateOpenJFXDependencies));
+        rootProject.getTasks().register("generateOpenJFXWebDependencies", task -> task.doLast(JavaFXUtils::generateOpenJFXWebDependencies));
         rootProject.getTasks().register("preTouchOpenJFXDependencies", task -> task.doLast(JavaFXUtils::preTouchOpenJFXDependencies));
     }
 }

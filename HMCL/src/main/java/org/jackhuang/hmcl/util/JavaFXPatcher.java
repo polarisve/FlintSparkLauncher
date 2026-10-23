@@ -21,10 +21,12 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.module.Configuration;
+import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
 import java.lang.module.ModuleReference;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -70,6 +72,64 @@ public final class JavaFXPatcher {
                         throw new RuntimeException(throwable);
                     }
                 });
+            }
+        } catch (Throwable t) {
+            throw new ReflectiveOperationException(t);
+        }
+    }
+
+    /// FSL: adds extra JavaFX modules (such as `javafx.web`) on top of the already loaded JavaFX.
+    ///
+    /// The new modules are resolved in a child layer of the layer containing `javafx.graphics`, and are
+    /// mapped to the system class loader like [#patch], so launcher code can use them directly.
+    /// Modules already present in a parent layer (for example `jdk.jsobject` on older JDKs) are reused.
+    ///
+    /// @param modules  root module names to resolve
+    /// @param jarPaths jars that may provide the root modules and their missing dependencies
+    /// @throws IllegalStateException       if JavaFX is not loaded as named modules
+    /// @throws ReflectiveOperationException if registering the modules with the system class loader fails
+    public static void patchExtraModules(Set<String> modules, Path[] jarPaths) throws ReflectiveOperationException {
+        ModuleLayer parent = javafx.scene.Node.class.getModule().getLayer();
+        if (parent == null) {
+            throw new IllegalStateException("JavaFX is not loaded as named modules");
+        }
+
+        // Prefer modules from the parent layers; only resolve what is actually missing from the jars
+        Configuration config = parent.configuration().resolveAndBind(ModuleFinder.of(), ModuleFinder.of(jarPaths), modules);
+
+        try {
+            for (var resolved : config.modules()) {
+                ((jdk.internal.loader.BuiltinClassLoader) ClassLoader.getSystemClassLoader()).loadModule(resolved.reference());
+            }
+        } catch (Throwable t) {
+            throw new ReflectiveOperationException(t);
+        }
+
+        ModuleLayer layer = ModuleLayer.defineModules(config, List.of(parent), name -> ClassLoader.getSystemClassLoader()).layer();
+
+        // Qualified exports/opens declared by the parent layer (e.g. javafx.graphics exporting internals
+        // to javafx.web) only apply to modules resolved together with it, so wire them up by hand.
+        try {
+            MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(Module.class, MethodHandles.lookup());
+            MethodHandle addExports = lookup.findVirtual(Module.class, "implAddExports", MethodType.methodType(void.class, String.class, Module.class));
+            MethodHandle addOpens = lookup.findVirtual(Module.class, "implAddOpens", MethodType.methodType(void.class, String.class, Module.class));
+            for (Module module : parent.modules()) {
+                for (ModuleDescriptor.Exports exports : module.getDescriptor().exports()) {
+                    for (String target : exports.targets()) {
+                        Optional<Module> targetModule = layer.findModule(target);
+                        if (targetModule.isPresent()) {
+                            addExports.invoke(module, exports.source(), targetModule.get());
+                        }
+                    }
+                }
+                for (ModuleDescriptor.Opens opens : module.getDescriptor().opens()) {
+                    for (String target : opens.targets()) {
+                        Optional<Module> targetModule = layer.findModule(target);
+                        if (targetModule.isPresent()) {
+                            addOpens.invoke(module, opens.source(), targetModule.get());
+                        }
+                    }
+                }
             }
         } catch (Throwable t) {
             throw new ReflectiveOperationException(t);
