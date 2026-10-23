@@ -80,3 +80,6 @@ language-subtag-registry
 
 # FSL local keys (Azure client ID, CurseForge API key), never commit
 fsl-secrets.properties
+
+# FSL: local reference copies of other launchers (PCL has its own licence; never commit)
+/reference/
