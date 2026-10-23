@@ -38,36 +38,36 @@
     -fx-background-color: -fsl2-rail;
     -fx-border-color: transparent #2A2440 transparent transparent;
     -fx-border-width: 0 1 0 0;
-    -fx-padding: 16 0 14 0;
-    -fx-spacing: 8;
+    -fx-padding: 10 0 10 0;
+    -fx-spacing: 4;
     -fx-alignment: top-center;
-    -fx-pref-width: 78;
-    -fx-min-width: 78;
+    -fx-pref-width: 60;
+    -fx-min-width: 60;
 }
 
 .fsl-rail-logo {
     -fx-background-color: linear-gradient(to bottom right, #A78BFA, #6D5DF5);
-    -fx-background-radius: 12;
-    -fx-min-width: 42;
-    -fx-min-height: 42;
-    -fx-max-width: 42;
-    -fx-max-height: 42;
+    -fx-background-radius: 9;
+    -fx-min-width: 32;
+    -fx-min-height: 32;
+    -fx-max-width: 32;
+    -fx-max-height: 32;
 }
 
 .fsl-rail-logo .label {
     -fx-text-fill: white;
     -fx-font-weight: bold;
-    -fx-font-size: 13px;
+    -fx-font-size: 11px;
 }
 
 .fsl-rail-item {
     -fx-background-color: transparent;
-    -fx-background-radius: 14;
-    -fx-min-width: 58;
-    -fx-max-width: 58;
-    -fx-min-height: 56;
-    -fx-padding: 6 0 6 0;
-    -fx-spacing: 4;
+    -fx-background-radius: 10;
+    -fx-min-width: 48;
+    -fx-max-width: 48;
+    -fx-min-height: 44;
+    -fx-padding: 4 0 4 0;
+    -fx-spacing: 2;
     -fx-alignment: center;
     -fx-cursor: hand;
 }
@@ -78,7 +78,7 @@
 
 .fsl-rail-item .label {
     -fx-text-fill: -fsl2-muted;
-    -fx-font-size: 11px;
+    -fx-font-size: 10px;
 }
 
 .fsl-rail-item:hover {
@@ -111,7 +111,7 @@
 
 .fsl-page-title {
     -fx-text-fill: -fsl2-text;
-    -fx-font-size: 22px;
+    -fx-font-size: 16px;
     -fx-font-weight: bold;
 }
 
@@ -122,9 +122,10 @@
     -fx-border-radius: 10;
     -fx-text-fill: -fsl2-text;
     -fx-prompt-text-fill: -fsl2-muted;
-    -fx-padding: 0 14 0 14;
-    -fx-pref-height: 38;
-    -fx-pref-width: 300;
+    -fx-padding: 0 10 0 10;
+    -fx-pref-height: 28;
+    -fx-pref-width: 220;
+    -fx-font-size: 12px;
 }
 
 .fsl-search:focused {
@@ -134,11 +135,11 @@
 
 /* ---------- Buttons ---------- */
 .fsl-btn {
-    -fx-background-radius: 12;
-    -fx-border-radius: 12;
-    -fx-padding: 0 22 0 22;
-    -fx-min-height: 42;
-    -fx-font-size: 14px;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-padding: 0 14 0 14;
+    -fx-min-height: 30;
+    -fx-font-size: 13px;
     -fx-font-weight: bold;
     -fx-cursor: hand;
 }
@@ -146,7 +147,7 @@
 .fsl-btn-primary {
     -fx-background-color: -fsl2-primary;
     -fx-text-fill: -fsl2-on-primary;
-    -fx-effect: dropshadow(gaussian, rgba(167, 139, 250, 0.38), 18, 0.15, 0, 4);
+    -fx-effect: dropshadow(gaussian, rgba(167, 139, 250, 0.30), 10, 0.1, 0, 2);
 }
 
 .fsl-btn-primary:hover {
@@ -193,11 +194,11 @@
 }
 
 .fsl-btn-large {
-    -fx-min-height: 56;
-    -fx-font-size: 18px;
-    -fx-padding: 0 44 0 44;
-    -fx-background-radius: 14;
-    -fx-border-radius: 14;
+    -fx-min-height: 38;
+    -fx-font-size: 14px;
+    -fx-padding: 0 26 0 26;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
 }
 
 .fsl-btn:disabled {
@@ -212,11 +213,11 @@
 /* ---------- Cards and text ---------- */
 .fsl-card {
     -fx-background-color: -fsl2-card;
-    -fx-background-radius: 16;
+    -fx-background-radius: 10;
     -fx-border-color: -fsl2-card-line;
-    -fx-border-radius: 16;
-    -fx-padding: 20;
-    -fx-spacing: 12;
+    -fx-border-radius: 10;
+    -fx-padding: 12 14 12 14;
+    -fx-spacing: 8;
 }
 
 .fsl-card-clickable {
@@ -234,13 +235,13 @@
 
 .fsl-title {
     -fx-text-fill: -fsl2-text;
-    -fx-font-size: 15px;
+    -fx-font-size: 13px;
     -fx-font-weight: bold;
 }
 
 .fsl-heading {
     -fx-text-fill: -fsl2-text;
-    -fx-font-size: 24px;
+    -fx-font-size: 18px;
     -fx-font-weight: bold;
 }
 
@@ -256,8 +257,8 @@
     -fx-text-fill: -fsl2-mint;
     -fx-border-color: rgba(94, 234, 212, 0.45);
     -fx-border-radius: 999;
-    -fx-padding: 2 9 2 9;
-    -fx-font-size: 12px;
+    -fx-padding: 1 7 1 7;
+    -fx-font-size: 11px;
     -fx-font-weight: bold;
 }
 
@@ -346,7 +347,7 @@
 
 .jfx-tool-bar .jfx-decorator-title, .jfx-tool-bar Label {
     -fx-text-fill: -fsl2-text;
-    -fx-font-size: 15px;
+    -fx-font-size: 13px;
     -fx-font-weight: bold;
 }
 
@@ -361,9 +362,9 @@
 /* Cards and list rows used across pages */
 .card, .card-non-transparent, .options-list-item, .md-list-cell, .installer-item-wrapper, .game-directory-list-item {
     -fx-background-color: -fsl2-card;
-    -fx-background-radius: 14;
+    -fx-background-radius: 8;
     -fx-border-color: -fsl2-card-line;
-    -fx-border-radius: 14;
+    -fx-border-radius: 8;
 }
 
 .options-list-item:hover, .md-list-cell:hover {
@@ -412,7 +413,7 @@
 /* Dialogs */
 .jfx-dialog-layout {
     -fx-background-color: -fsl2-card;
-    -fx-background-radius: 18;
+    -fx-background-radius: 10;
 }
 
 .jfx-snackbar-content {
