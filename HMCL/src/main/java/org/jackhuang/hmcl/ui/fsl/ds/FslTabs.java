@@ -82,7 +82,9 @@ public final class FslTabs<K> extends StackPane {
     public FslTabs() {
         getStyleClass().add("fsl-tabs");
         setMaxSize(USE_PREF_SIZE, USE_PREF_SIZE);
+        setMinWidth(USE_PREF_SIZE);
         row.setAlignment(Pos.CENTER);
+        row.setMinWidth(Region.USE_PREF_SIZE);
 
         indicator.getStyleClass().add("fsl-tab-indicator");
         indicator.setManaged(false);
@@ -106,8 +108,18 @@ public final class FslTabs<K> extends StackPane {
     /// @param icon the icon shown before the label
     /// @param text the label
     public void addItem(K key, SVG icon, String text) {
-        HBox item = new HBox(5, icon.createIcon(15), new Label(text));
+        Label label = new Label(text);
+        // Never shrink a tab: squeezed labels turned into "..." when the title bar got crowded
+        label.setMinWidth(Region.USE_PREF_SIZE);
+        HBox item = new HBox(5, icon.createIcon(15), label);
+        item.setMinWidth(Region.USE_PREF_SIZE);
         item.getStyleClass().add("fsl-tab");
+        // Re-align the highlight whenever this tab moves (title bar re-layout, window resize)
+        item.boundsInParentProperty().addListener(o -> {
+            if (key.equals(selected.get())) {
+                moveIndicator(false);
+            }
+        });
         item.setAlignment(Pos.CENTER);
         item.setFocusTraversable(true);
         item.setAccessibleRole(AccessibleRole.BUTTON);
@@ -167,6 +179,10 @@ public final class FslTabs<K> extends StackPane {
         indicator.resize(indicator.getWidth(), bounds.getHeight());
 
         if (slide != null) {
+            if (!animate && slide.getStatus() == javafx.animation.Animation.Status.RUNNING) {
+                // A layout change during the slide: restart it toward the new position
+                animate = true;
+            }
             slide.stop();
         }
         if (!animate || !indicator.isVisible() || !FslMotion.enabled()) {

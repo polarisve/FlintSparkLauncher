@@ -81,6 +81,7 @@ public final class FslNavigationTabs extends StackPane {
         tabs.selectedProperty().set(Destination.HOME);
 
         setMaxSize(USE_PREF_SIZE, USE_PREF_SIZE);
+        setMinWidth(USE_PREF_SIZE);
         getChildren().add(tabs);
     }
 

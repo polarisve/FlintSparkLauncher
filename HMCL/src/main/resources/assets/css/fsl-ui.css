@@ -667,3 +667,14 @@
 .popup-menu-content .advanced-list-item .two-line-list-item > .second-line > .subtitle Text {
     -fx-fill: #FFFFFF;
 }
+
+/* ---------- Dialog buttons ----------
+ * Keep confirm/cancel (login dialogs and every other dialog) from touching each other. */
+.jfx-layout-actions {
+    -fx-hgap: 12;
+    -fx-vgap: 8;
+}
+
+.jfx-layout-actions > HBox {
+    -fx-spacing: 12;
+}
