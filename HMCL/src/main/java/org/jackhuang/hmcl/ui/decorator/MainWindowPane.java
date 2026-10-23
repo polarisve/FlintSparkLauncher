@@ -233,6 +233,15 @@ final class MainWindowPane extends StackPane {
         minimizeButton.setOnAction(event -> decorator.minimizeWindow());
         decorator.forbidDraggingWindow(minimizeButton);
 
+        // FSL: maximize/restore; the icon follows the window state
+        JFXButton maximizeButton = new JFXButton();
+        maximizeButton.setFocusTraversable(false);
+        maximizeButton.getStyleClass().add("jfx-decorator-button");
+        maximizeButton.setOnAction(event -> decorator.toggleMaximizeWindow());
+        FXUtils.onChangeAndOperate(decorator.windowMaximizedProperty(), maximized -> maximizeButton.setGraphic(
+                (maximized ? SVG.RESTORE_WINDOW : SVG.MAXIMIZE_WINDOW).createIcon(Themes.titleFillProperty())));
+        decorator.forbidDraggingWindow(maximizeButton);
+
         JFXButton closeButton = new JFXButton();
         closeButton.setFocusTraversable(false);
         closeButton.setGraphic(SVG.CLOSE.createIcon(Themes.titleFillProperty()));
@@ -240,7 +249,7 @@ final class MainWindowPane extends StackPane {
         closeButton.setOnAction(event -> decorator.closeWindow());
         decorator.forbidDraggingWindow(closeButton);
 
-        buttons.getChildren().setAll(helpButton, minimizeButton, closeButton);
+        buttons.getChildren().setAll(helpButton, minimizeButton, maximizeButton, closeButton);
         return buttons;
     }
 

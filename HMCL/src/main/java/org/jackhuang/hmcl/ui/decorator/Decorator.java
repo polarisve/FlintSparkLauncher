@@ -181,6 +181,22 @@ public final class Decorator {
     /// The stage currently controlled by this decorator, or `null` while detached.
     private @Nullable Stage stage;
 
+    /// FSL: whether the attached stage is maximized, for the title-bar maximize/restore button.
+    private final javafx.beans.property.BooleanProperty windowMaximized = new SimpleBooleanProperty(this, "windowMaximized");
+
+    /// FSL: returns whether the attached stage is maximized.
+    javafx.beans.property.ReadOnlyBooleanProperty windowMaximizedProperty() {
+        return windowMaximized;
+    }
+
+    /// FSL: maximizes the attached stage, or restores it when it is already maximized.
+    void toggleMaximizeWindow() {
+        @Nullable Stage currentStage = stage;
+        if (currentStage != null && WindowState.supportsMaximization(currentStage)) {
+            currentStage.setMaximized(!WindowState.isMaximized(currentStage));
+        }
+    }
+
     /// Tracks the attached stage's content geometry, or `null` while detached.
     private @Nullable WindowBounds windowBounds;
 
@@ -314,6 +330,8 @@ public final class Decorator {
     ///
     /// @param edgeToEdge whether the attached stage is maximized under [WindowState]'s policy or full-screen
     private void updateWindowDecoration(boolean edgeToEdge) {
+        @Nullable Stage currentStage = stage;
+        windowMaximized.set(currentStage != null && WindowState.isMaximized(currentStage));
         boolean customDecoration = !nativeDecorationEnabled && !edgeToEdge;
         root.setPadding(customDecoration ? SHADOW_INSETS : Insets.EMPTY);
         shadowContainer.setEffect(customDecoration ? windowShadow : null);
