@@ -62,6 +62,10 @@ import org.jackhuang.hmcl.ui.construct.TwoLineListItem;
 import org.jackhuang.hmcl.ui.decorator.DecoratorPage;
 import org.jackhuang.hmcl.ui.fsl.EmberBackground;
 import org.jackhuang.hmcl.ui.fsl.FslHome;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.Priority;
+import org.jackhuang.hmcl.setting.Accounts;
+import org.jackhuang.hmcl.ui.account.AccountAdvancedListItem;
 import org.jackhuang.hmcl.ui.instances.GameListPopupMenu;
 import org.jackhuang.hmcl.ui.instances.Instances;
 import org.jackhuang.hmcl.upgrade.RemoteVersion;
@@ -324,10 +328,21 @@ public final class MainPage extends StackPane implements DecoratorPage {
 
         // FSL: hero block with the selected instance, and glowing launch button
         VBox hero = FslHome.createHero(currentGameProperty());
-        StackPane.setMargin(hero, new Insets(16, 16, 0, 20));
         FslHome.installLaunchEffects(launchPane);
 
-        getChildren().addAll(hero, updatePane, launchPane);
+        // FSL: left panel (account on top, launch button at the bottom), content on the right
+        AccountAdvancedListItem account = new AccountAdvancedListItem();
+        account.accountProperty().bind(Accounts.selectedAccountProperty());
+        account.setOnAction(e -> Controllers.navigate(Controllers.getAccountListPage()));
+        Region sideGrow = new Region();
+        VBox.setVgrow(sideGrow, Priority.ALWAYS);
+        VBox side = new VBox(10, account, sideGrow, launchPane);
+        side.getStyleClass().add("fsl-home-side");
+        FXUtils.setLimitWidth(side, 220);
+        StackPane.setAlignment(side, Pos.CENTER_LEFT);
+        StackPane.setMargin(hero, new Insets(16, 16, 0, 236));
+
+        getChildren().addAll(side, hero, updatePane);
 
     }
 
