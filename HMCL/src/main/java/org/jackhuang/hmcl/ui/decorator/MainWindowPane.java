@@ -140,6 +140,10 @@ final class MainWindowPane extends StackPane {
         titleBar.setRight(right);
 
         navBarPane = new TransitionPane();
+        // FSL: keep the page title narrow so it never pushes the tabs in the middle
+        navBarPane.setMaxWidth(220);
+        navBarPane.setMinWidth(0);
+        FXUtils.setOverflowHidden(navBarPane);
         titleBar.setLeft(navBarPane);
         decorator.capableDraggingWindow(navBarPane);
 
