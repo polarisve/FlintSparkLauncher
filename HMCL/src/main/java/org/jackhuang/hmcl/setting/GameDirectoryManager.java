@@ -36,6 +36,7 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnknownNullability;
 import org.jetbrains.annotations.UnmodifiableView;
 
+import java.nio.file.Files;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -214,7 +215,33 @@ public final class GameDirectoryManager {
             }
             repository.refreshAsync().start();
         });
-        selectedGameDirectory.set(currentGameDirectory != null ? currentGameDirectory : mergedGameDirectories.get(0));
+        selectedGameDirectory.set(preferOfficialDirectory(
+                currentGameDirectory != null ? currentGameDirectory : mergedGameDirectories.get(0)));
+    }
+
+    /// FSL: falls back to the official `.minecraft` when the chosen directory has no game versions.
+    ///
+    /// A fresh FSL selects the empty `.minecraft` next to the launcher, which hides every version the
+    /// official launcher (or another launcher) already installed. A directory that has versions is
+    /// never replaced, so a deliberate choice of another directory is kept.
+    ///
+    /// @param chosen the directory restored from settings, or the first one
+    /// @return the directory to select
+    private static GameDirectory preferOfficialDirectory(GameDirectory chosen) {
+        if (hasVersions(chosen)) {
+            return chosen;
+        }
+        for (GameDirectory gameDirectory : mergedGameDirectories) {
+            if (isGameDirectoryPath(gameDirectory, HOME_GAME_DIRECTORY_PATH) && hasVersions(gameDirectory)) {
+                return gameDirectory;
+            }
+        }
+        return chosen;
+    }
+
+    /// Returns whether the game directory contains a `versions` folder.
+    private static boolean hasVersions(GameDirectory gameDirectory) {
+        return Files.isDirectory(getOrCreateRepository(gameDirectory).getLayout().getBaseDirectory().resolve("versions"));
     }
 
     /// Restores selection and notifies consumers after the selected repository publishes a loaded snapshot.
