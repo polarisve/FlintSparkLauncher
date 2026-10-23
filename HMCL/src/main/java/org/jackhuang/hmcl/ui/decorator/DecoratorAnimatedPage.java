@@ -33,6 +33,9 @@ public class DecoratorAnimatedPage extends Control {
 
     {
         getStyleClass().add("gray-background");
+        // FSL: shared look for the left list column of download, instance and settings pages
+        left.getStyleClass().add("fsl-page-side");
+        center.getStyleClass().add("fsl-page-content");
     }
 
     protected void setLeft(Node... children) {
