@@ -46,63 +46,115 @@ import javafx.scene.layout.HBox;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.SVG;
 import org.jackhuang.hmcl.ui.fsl.ds.Fsl;
+import javafx.geometry.Insets;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.layout.Priority;
+import org.jackhuang.hmcl.game.TexturesLoader;
+import org.jackhuang.hmcl.setting.Accounts;
+import org.jackhuang.hmcl.ui.instances.Instances;
+import org.jackhuang.hmcl.util.StringUtils;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
 
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
-/// Building blocks of the FSL home page: the hero text block and launch button effects.
+/// Building blocks of the FSL home page: side panel cards, right-side content and launch button effects.
 @NotNullByDefault
 public final class FslHome {
 
     private FslHome() {
     }
 
-    /// Creates the hero block shown at the bottom-left of the home page.
+    /// Creates the account card at the top of the home side panel: large avatar, name and login type.
     ///
-    /// It shows the launcher tag, the selected instance as a large title, and a hint line,
-    /// and updates (with a short fade) whenever the selected instance changes.
+    /// Clicking it opens the account page.
+    public static VBox createAccountCard() {
+        Canvas avatar = new Canvas(64, 64);
+        Label name = Fsl.title("");
+        name.setStyle("-fx-font-size: 15px;");
+        Label type = Fsl.muted("");
+
+        VBox card = new VBox(8, avatar, name, type);
+        card.getStyleClass().add("fsl-account-card");
+        card.setAlignment(Pos.CENTER);
+        card.setOnMouseClicked(e -> Controllers.navigate(Controllers.getAccountListPage()));
+
+        FXUtils.onChangeAndOperate(Accounts.selectedAccountProperty(), account -> {
+            if (account == null) {
+                TexturesLoader.unbindAvatar(avatar);
+                TexturesLoader.drawAvatar(avatar, TexturesLoader.getDefaultSkinImage());
+                name.setText(i18n("account.missing"));
+                type.setText(i18n("fsl.home.account.add"));
+            } else {
+                TexturesLoader.bindAvatar(avatar, account);
+                String profileName = account.getProfileName();
+                name.setText(StringUtils.isBlank(profileName) ? account.getProfileID().toString() : profileName);
+                type.setText(Accounts.getLocalizedLoginTypeName(Accounts.getAccountFactory(account)));
+            }
+        });
+        return card;
+    }
+
+    /// Creates the small "version" line above the launch button; clicking it opens the instance list.
     ///
     /// @param currentGame the currently selected game instance, or `null` when there is none
-    /// @return the hero node, already aligned for a [StackPane]
-    public static VBox createHero(ObservableValue<@Nullable HMCLGameInstance> currentGame) {
-        int hour = java.time.LocalTime.now().getHour();
-        String greeting = i18n(hour < 6 ? "fsl.home.greet.night" : hour < 12 ? "fsl.home.greet.morning"
-                : hour < 18 ? "fsl.home.greet.afternoon" : "fsl.home.greet.evening");
-        Label heading = Fsl.heading(greeting);
-        Label subtitle = Fsl.muted("");
+    /// @return the line node
+    public static HBox createInstanceLine(ObservableValue<@Nullable HMCLGameInstance> currentGame) {
+        Label caption = Fsl.muted(i18n("fsl.home.version"));
+        Label value = new Label();
+        value.getStyleClass().add("fsl-text");
+        Region grow = new Region();
+        HBox.setHgrow(grow, Priority.ALWAYS);
+        HBox line = new HBox(6, caption, grow, value, SVG.ARROW_DROP_DOWN.createIcon(16));
+        line.getStyleClass().add("fsl-instance-line");
+        line.setAlignment(Pos.CENTER_LEFT);
+        line.setOnMouseClicked(e -> Controllers.navigate(Controllers.getGameListPage()));
+        FXUtils.onChangeAndOperate(currentGame, game ->
+                value.setText(game == null ? i18n("fsl.home.version.none") : game.getId().toString()));
+        return line;
+    }
 
-        Label instanceLabel = Fsl.muted(i18n("fsl.home.current"));
+    /// Creates the right side of the home page: the current instance, download shortcuts and a tip.
+    ///
+    /// @param currentGame the currently selected game instance, or `null` when there is none
+    /// @return the content node, already aligned for a [StackPane]
+    public static VBox createHero(ObservableValue<@Nullable HMCLGameInstance> currentGame) {
         Label instanceName = Fsl.title("");
-        instanceName.setStyle("-fx-font-size: 15px;");
+        instanceName.setStyle("-fx-font-size: 16px;");
         Label state = Fsl.chip(i18n("fsl.home.ready.chip"));
         HBox nameRow = new HBox(8, instanceName, state);
         nameRow.setAlignment(Pos.CENTER_LEFT);
+        Label subtitle = Fsl.muted("");
 
-        Button download = Fsl.button(i18n("fsl.home.action.download"), SVG.DOWNLOAD, Fsl.ButtonKind.SECONDARY);
-        download.setOnAction(e -> Controllers.navigate(Controllers.getDownloadPage()));
-        Button instances = Fsl.button(i18n("fsl.home.action.instances"), SVG.DEPLOYED_CODE, Fsl.ButtonKind.SECONDARY);
-        instances.setOnAction(e -> Controllers.navigate(Controllers.getGameListPage()));
-        Button folder = Fsl.button(i18n("fsl.home.action.settings"), SVG.SETTINGS, Fsl.ButtonKind.GHOST);
-        folder.setOnAction(e -> {
+        Button settings = Fsl.button(i18n("fsl.home.action.settings"), SVG.SETTINGS, Fsl.ButtonKind.SECONDARY);
+        settings.setOnAction(e -> {
             @Nullable HMCLGameInstance game = currentGame.getValue();
             if (game != null) {
-                org.jackhuang.hmcl.ui.instances.Instances.modifyGameSettings(game);
-            } else {
-                Controllers.navigate(Controllers.getGameListPage());
+                Instances.modifyGameSettings(game);
             }
         });
-        HBox actions = new HBox(8, download, instances, folder);
-        actions.setAlignment(Pos.CENTER_LEFT);
+        Button manage = Fsl.button(i18n("fsl.home.action.instances"), SVG.DEPLOYED_CODE, Fsl.ButtonKind.GHOST);
+        manage.setOnAction(e -> Controllers.navigate(Controllers.getGameListPage()));
+        HBox actions = new HBox(8, settings, manage);
 
-        VBox card = Fsl.card();
-        card.getStyleClass().add("fsl-card-hero");
-        card.getChildren().addAll(instanceLabel, nameRow, subtitle, actions);
-        card.setMaxWidth(440);
+        VBox instanceCard = Fsl.card();
+        instanceCard.getStyleClass().add("fsl-card-hero");
+        instanceCard.getChildren().addAll(Fsl.muted(i18n("fsl.home.current")), nameRow, subtitle, actions);
 
-        VBox hero = new VBox(10, heading, card);
+        HBox shortcuts = new HBox(10,
+                shortcut(SVG.DOWNLOAD, "fsl.home.tile.game", "fsl.home.tile.game.sub",
+                        () -> Controllers.getDownloadPage().showGameDownloads()),
+                shortcut(SVG.EXTENSION, "fsl.home.tile.mod", "fsl.home.tile.mod.sub",
+                        () -> Controllers.getDownloadPage().showModDownloads()),
+                shortcut(SVG.FOLDER, "fsl.home.tile.modpack", "fsl.home.tile.modpack.sub",
+                        () -> Controllers.getDownloadPage().showModpackDownloads()));
+
+        VBox tip = Fsl.card(i18n("fsl.home.tip.title"));
+        tip.getChildren().add(Fsl.muted(i18n("fsl.home.tip")));
+
+        VBox hero = new VBox(12, instanceCard, shortcuts, tip);
+        hero.setPadding(new Insets(4));
         hero.setPickOnBounds(false);
-        hero.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         StackPane.setAlignment(hero, Pos.TOP_LEFT);
 
         FXUtils.onChangeAndOperate(currentGame, game -> {
@@ -110,11 +162,31 @@ public final class FslHome {
             instanceName.setText(has ? game.getId().toString() : i18n("fsl.home.no_instance"));
             subtitle.setText(i18n(has ? "fsl.home.ready" : "fsl.home.no_instance.subtitle"));
             state.setVisible(has);
-            folder.setDisable(!has);
+            settings.setDisable(!has);
         });
 
         playEntranceOnce(hero);
         return hero;
+    }
+
+    /// Creates a clickable shortcut tile that opens a download section.
+    ///
+    /// @param icon        the tile icon
+    /// @param titleKey    i18n key of the title
+    /// @param subtitleKey i18n key of the subtitle
+    /// @param selectTab   selects the matching tab on the download page
+    /// @return the tile
+    private static VBox shortcut(SVG icon, String titleKey, String subtitleKey, Runnable selectTab) {
+        VBox tile = Fsl.card();
+        tile.getStyleClass().add("fsl-card-clickable");
+        tile.getChildren().addAll(icon.createIcon(20), Fsl.title(i18n(titleKey)), Fsl.muted(i18n(subtitleKey)));
+        tile.setOnMouseClicked(e -> {
+            Controllers.navigate(Controllers.getDownloadPage());
+            selectTab.run();
+        });
+        HBox.setHgrow(tile, Priority.ALWAYS);
+        tile.setMaxWidth(Double.MAX_VALUE);
+        return tile;
     }
 
     /// Adds the breathing glow and hover zoom to the launch button group.

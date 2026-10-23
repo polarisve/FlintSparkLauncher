@@ -65,7 +65,6 @@ import org.jackhuang.hmcl.ui.fsl.FslHome;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.Priority;
 import org.jackhuang.hmcl.setting.Accounts;
-import org.jackhuang.hmcl.ui.account.AccountAdvancedListItem;
 import org.jackhuang.hmcl.ui.instances.GameListPopupMenu;
 import org.jackhuang.hmcl.ui.instances.Instances;
 import org.jackhuang.hmcl.upgrade.RemoteVersion;
@@ -124,7 +123,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
         titleNode.setAlignment(Pos.CENTER_LEFT);
 
         ImageView titleIcon = new ImageView(FXUtils.newBuiltinImage("/assets/img/icon-title.png"));
-        Label titleLabel = new Label(Metadata.FULL_TITLE);
+        Label titleLabel = new Label(Metadata.NAME);
         if (I18n.isUpsideDown()) {
             titleIcon.setRotate(180);
             titleLabel.setRotate(180);
@@ -326,21 +325,21 @@ public final class MainPage extends StackPane implements DecoratorPage {
             launchPane.getChildren().setAll(launchButton, menuButton);
         }
 
-        // FSL: hero block with the selected instance, and glowing launch button
+        // FSL: launcher-style home. Left: account, current version and the launch button.
+        // Right: the current instance, shortcuts and a tip.
         VBox hero = FslHome.createHero(currentGameProperty());
         FslHome.installLaunchEffects(launchPane);
 
-        // FSL: left panel (account on top, launch button at the bottom), content on the right
-        AccountAdvancedListItem account = new AccountAdvancedListItem();
-        account.accountProperty().bind(Accounts.selectedAccountProperty());
-        account.setOnAction(e -> Controllers.navigate(Controllers.getAccountListPage()));
         Region sideGrow = new Region();
         VBox.setVgrow(sideGrow, Priority.ALWAYS);
-        VBox side = new VBox(10, account, sideGrow, launchPane);
+        VBox side = new VBox(12, FslHome.createAccountCard(), sideGrow,
+                FslHome.createInstanceLine(currentGameProperty()), launchPane);
         side.getStyleClass().add("fsl-home-side");
-        FXUtils.setLimitWidth(side, 220);
+        FXUtils.setLimitWidth(side, 240);
         StackPane.setAlignment(side, Pos.CENTER_LEFT);
-        StackPane.setMargin(hero, new Insets(16, 16, 0, 236));
+        // Cancel this page's padding so the panel touches the window edges
+        StackPane.setMargin(side, new Insets(-20, 0, -20, -20));
+        StackPane.setMargin(hero, new Insets(0, 0, 0, 236));
 
         getChildren().addAll(side, hero, updatePane);
 

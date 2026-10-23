@@ -507,3 +507,83 @@
 .launch-pane > .launch-button .label {
     -fx-font-size: 13px;
 }
+
+/* ---------- Title-bar tabs ---------- */
+.fsl-tab {
+    -fx-padding: 5 12 5 12;
+    -fx-background-radius: 8;
+    -fx-cursor: hand;
+}
+
+.fsl-tab .label {
+    -fx-text-fill: -fsl2-muted;
+    -fx-font-size: 13px;
+}
+
+.fsl-tab .svg {
+    -fx-fill: -fsl2-muted;
+}
+
+.fsl-tab:hover .label {
+    -fx-text-fill: -fsl2-text;
+}
+
+.fsl-tab:hover .svg {
+    -fx-fill: -fsl2-text;
+}
+
+.fsl-tab:selected .label {
+    -fx-text-fill: -fsl2-on-primary;
+    -fx-font-weight: bold;
+}
+
+.fsl-tab:selected .svg {
+    -fx-fill: -fsl2-on-primary;
+}
+
+.fsl-tab-indicator {
+    -fx-background-color: -fsl2-primary;
+    -fx-background-radius: 8;
+}
+
+/* ---------- Home side panel ---------- */
+.fsl-account-card {
+    -fx-padding: 18 8 8 8;
+    -fx-background-radius: 10;
+    -fx-cursor: hand;
+}
+
+.fsl-account-card:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.08);
+}
+
+.fsl-instance-line {
+    -fx-background-color: -fsl2-card;
+    -fx-border-color: -fsl2-card-line;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-padding: 7 10 7 10;
+    -fx-cursor: hand;
+}
+
+.fsl-instance-line:hover {
+    -fx-border-color: -fsl2-border;
+}
+
+.fsl-instance-line .svg {
+    -fx-fill: -fsl2-muted;
+}
+
+.fsl-card-clickable .svg {
+    -fx-fill: -fsl2-primary;
+}
+
+.launch-pane {
+    -fx-max-width: 216px;
+    -fx-min-width: 216px;
+}
+
+.launch-pane > .jfx-button.launch-button {
+    -fx-max-width: 188px;
+    -fx-min-width: 188px;
+}
