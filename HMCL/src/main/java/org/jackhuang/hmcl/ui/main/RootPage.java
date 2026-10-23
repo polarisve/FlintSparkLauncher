@@ -110,7 +110,7 @@ public class RootPage extends DecoratorAnimatedPage implements DecoratorPage {
         protected Skin(RootPage control) {
             super(control);
 
-            // FSL: navigation moved to the window-wide rail (FslNavigationRail); no sidebar here
+            // FSL: navigation moved to the title-bar tabs (FslNavigationTabs); no sidebar here
             FXUtils.setLimitWidth(getSkinnable().getLeft(), 0);
             getSkinnable().getLeft().setVisible(false);
 

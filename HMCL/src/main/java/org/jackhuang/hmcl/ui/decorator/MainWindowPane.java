@@ -18,7 +18,7 @@
 package org.jackhuang.hmcl.ui.decorator;
 
 import org.jackhuang.hmcl.ui.construct.Navigator;
-import org.jackhuang.hmcl.ui.fsl.FslNavigationRail;
+import org.jackhuang.hmcl.ui.fsl.FslNavigationTabs;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.fsl.ds.FslTopBar;
@@ -140,8 +140,15 @@ final class MainWindowPane extends StackPane {
         titleBar.setRight(right);
 
         navBarPane = new TransitionPane();
-        titleBar.setCenter(navBarPane);
+        titleBar.setLeft(navBarPane);
         decorator.capableDraggingWindow(navBarPane);
+
+        // FSL: top-level pages as tabs in the middle of the title bar
+        FslNavigationTabs tabs = new FslNavigationTabs(() -> decorator.getNavigator().clear());
+        decorator.getNavigator().addEventHandler(Navigator.NavigationEvent.NAVIGATED, event -> tabs.sync(event.getNode()));
+        decorator.forbidDraggingWindow(tabs);
+        decorator.forbidDraggingWindow(search);
+        titleBar.setCenter(tabs);
         frame.setTop(titleBar);
 
         updateTitleBarBackground();
@@ -155,13 +162,7 @@ final class MainWindowPane extends StackPane {
 
         decorator.capableDraggingWindow(titleBar);
 
-        // FSL: the navigation rail runs the full height on the left, next to the title bar and content
-        FslNavigationRail rail = new FslNavigationRail(() -> decorator.getNavigator().clear());
-        decorator.getNavigator().addEventHandler(Navigator.NavigationEvent.NAVIGATED, event -> rail.sync(event.getNode()));
-        BorderPane shell = new BorderPane(frame);
-        shell.setLeft(rail);
-
-        getChildren().setAll(backgroundNode, shell);
+        getChildren().setAll(backgroundNode, frame);
     }
 
     /// Moves the custom title bar into or out of the native dragging header.
