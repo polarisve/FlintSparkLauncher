@@ -21,8 +21,10 @@ import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.css.PseudoClass;
@@ -30,6 +32,7 @@ import javafx.geometry.Bounds;
 import javafx.geometry.Pos;
 import javafx.scene.AccessibleRole;
 import javafx.scene.control.Label;
+import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -72,6 +75,9 @@ public final class FslTabs<K> extends StackPane {
     /// The selected tab, or `null` when none is selected.
     private final ObjectProperty<@Nullable K> selected = new SimpleObjectProperty<>(this, "selected");
 
+    /// Whether tabs show only their icons (used when the title bar is short of space).
+    private final BooleanProperty compact = new SimpleBooleanProperty(this, "compact", false);
+
     /// Runs the pill animation.
     private @Nullable Timeline slide;
 
@@ -111,8 +117,19 @@ public final class FslTabs<K> extends StackPane {
         Label label = new Label(text);
         // Never shrink a tab: squeezed labels turned into "..." when the title bar got crowded
         label.setMinWidth(Region.USE_PREF_SIZE);
+        label.visibleProperty().bind(compact.not());
+        label.managedProperty().bind(compact.not());
         HBox item = new HBox(5, icon.createIcon(15), label);
         item.setMinWidth(Region.USE_PREF_SIZE);
+        // Icon-only tabs still tell their name when pointed at
+        Tooltip tooltip = new Tooltip(text);
+        compact.addListener((o, was, isCompact) -> {
+            if (isCompact) {
+                Tooltip.install(item, tooltip);
+            } else {
+                Tooltip.uninstall(item, tooltip);
+            }
+        });
         item.getStyleClass().add("fsl-tab");
         // Re-align the highlight whenever this tab moves (title bar re-layout, window resize)
         item.boundsInParentProperty().addListener(o -> {
@@ -151,6 +168,16 @@ public final class FslTabs<K> extends StackPane {
         } else {
             selected.set(key);
         }
+    }
+
+    /// Returns whether tabs show only their icons.
+    public boolean isCompact() {
+        return compact.get();
+    }
+
+    /// Shows only the icons (`true`) or icons with labels (`false`).
+    public void setCompact(boolean value) {
+        compact.set(value);
     }
 
     /// Returns the property holding the selected tab.
