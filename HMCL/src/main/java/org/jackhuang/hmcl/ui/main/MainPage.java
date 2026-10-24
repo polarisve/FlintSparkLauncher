@@ -335,8 +335,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
 
         Region sideGrow = new Region();
         VBox.setVgrow(sideGrow, Priority.ALWAYS);
-        VBox side = new VBox(12, FslHome.createAccountCard(), sideGrow,
-                FslHome.createInstanceLine(currentGameProperty()), launchPane);
+        VBox side = new VBox(12, FslHome.createAccountCard(), sideGrow, launchPane);
         side.getStyleClass().add("fsl-home-side");
         FXUtils.setLimitWidth(side, 240);
         StackPane.setAlignment(side, Pos.CENTER_LEFT);

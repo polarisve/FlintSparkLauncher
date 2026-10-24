@@ -94,25 +94,6 @@ public final class FslHome {
         return card;
     }
 
-    /// Creates the small "version" line above the launch button; clicking it opens the instance list.
-    ///
-    /// @param currentGame the currently selected game instance, or `null` when there is none
-    /// @return the line node
-    public static HBox createInstanceLine(ObservableValue<@Nullable HMCLGameInstance> currentGame) {
-        Label caption = Fsl.muted(i18n("fsl.home.version"));
-        Label value = new Label();
-        value.getStyleClass().add("fsl-text");
-        Region grow = new Region();
-        HBox.setHgrow(grow, Priority.ALWAYS);
-        HBox line = new HBox(6, caption, grow, value, SVG.ARROW_DROP_DOWN.createIcon(16));
-        line.getStyleClass().add("fsl-instance-line");
-        line.setAlignment(Pos.CENTER_LEFT);
-        line.setOnMouseClicked(e -> Controllers.navigate(Controllers.getGameListPage()));
-        FXUtils.onChangeAndOperate(currentGame, game ->
-                value.setText(game == null ? i18n("fsl.home.version.none") : game.getId().toString()));
-        return line;
-    }
-
     /// Creates the right side of the home page: the current instance, download shortcuts and a tip.
     ///
     /// @param currentGame the currently selected game instance, or `null` when there is none
