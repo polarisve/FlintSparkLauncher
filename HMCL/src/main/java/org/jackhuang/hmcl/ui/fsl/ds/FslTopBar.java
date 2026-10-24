@@ -35,8 +35,8 @@ import java.util.function.Consumer;
 
 /// FSL top bar: page title on the left, global search and trailing actions on the right.
 ///
-/// Only the magnifier button hands the query to the search handler. Enter does nothing (it used to
-/// reach the home page's launch button and start the game); Esc clears the box.
+/// Enter or the magnifier button hands the query to the search handler; Enter never reaches the
+/// launch button. Esc clears the box.
 @NotNullByDefault
 public final class FslTopBar extends HBox {
 
@@ -52,7 +52,7 @@ public final class FslTopBar extends HBox {
     /// Creates a top bar.
     ///
     /// @param searchPrompt placeholder text for the search box
-    /// @param onSearch     called with the trimmed query when the magnifier is pressed
+    /// @param onSearch     called with the trimmed query when Enter or the magnifier is pressed
     public FslTopBar(String searchPrompt, Consumer<String> onSearch) {
         getStyleClass().add("fsl-topbar");
 
@@ -64,7 +64,7 @@ public final class FslTopBar extends HBox {
         // Clicking still focuses it; this only stops it grabbing focus when the window opens
         search.setFocusTraversable(false);
 
-        // Magnifier inside the right end of the box; the only way to start a search
+        // Magnifier inside the right end of the box; clicking it searches like Enter
         JFXButton magnifier = new JFXButton();
         magnifier.getStyleClass().add("fsl-search-button");
         magnifier.setGraphic(SVG.SEARCH.createIcon(14));
@@ -88,7 +88,9 @@ public final class FslTopBar extends HBox {
         search.getProperties().put(Decorator.KEEP_KEY_EVENTS, Boolean.TRUE);
         search.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ENTER) {
-                // Swallow Enter so it never triggers the default (launch) button
+                // Enter searches like the magnifier. Consumed so it never reaches the home page's
+                // default (launch) button, which used to start the game.
+                submit.run();
                 e.consume();
             } else if (e.getCode() == KeyCode.ESCAPE) {
                 search.clear();
