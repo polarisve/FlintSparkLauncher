@@ -73,7 +73,7 @@ import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 /// FSL aggregated search: one page with every kind of result for a keyword.
 ///
 /// Opened from the title-bar search box. Each section (installed instances, game versions,
-/// modpacks, mods, resource packs, shaders, worlds) searches on its own and fills in when its
+/// modpacks, mods, resource packs, shaders, data packs, worlds) searches on its own and fills in when its
 /// results arrive, so a slow source never blocks the others. Clicking a result opens it directly;
 /// "查看全部" opens the matching download tab with the keyword already searched.
 @NotNullByDefault
@@ -124,10 +124,11 @@ public final class FslSearchPage extends StackPane implements DecoratorPage {
         Section resourcePacks = addonSection(downloads, RemoteAddon.Type.RESOURCE_PACK, SVG.TEXTURE, i18n("resourcepack"));
         Section shaders = addonSection(downloads, RemoteAddon.Type.SHADER_PACK, SVG.WB_SUNNY, i18n("download.shader"));
         Section worlds = addonSection(downloads, RemoteAddon.Type.WORLD, SVG.PUBLIC, i18n("world"));
+        Section dataPacks = addonSection(downloads, RemoteAddon.Type.DATAPACK, SVG.SCHEMA, i18n("datapack"));
 
         // Two columns so more results fit on screen
         VBox left = column(instances, versions, modpacks, shaders);
-        VBox right = column(mods, resourcePacks, worlds);
+        VBox right = column(mods, resourcePacks, dataPacks, worlds);
         HBox columns = new HBox(10, left, right);
         columns.setPadding(new Insets(10, 12, 12, 12));
 
@@ -144,6 +145,7 @@ public final class FslSearchPage extends StackPane implements DecoratorPage {
         searchAddons(resourcePacks, downloads, RemoteAddon.Type.RESOURCE_PACK);
         searchAddons(shaders, downloads, RemoteAddon.Type.SHADER_PACK);
         searchAddons(worlds, downloads, RemoteAddon.Type.WORLD);
+        searchAddons(dataPacks, downloads, RemoteAddon.Type.DATAPACK);
     }
 
     @Override

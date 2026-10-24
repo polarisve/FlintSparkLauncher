@@ -34,6 +34,9 @@ import org.jackhuang.hmcl.game.HMCLDependencyManager;
 import org.jackhuang.hmcl.game.HMCLGameBuilder;
 import org.jackhuang.hmcl.game.HMCLGameInstance;
 import org.jackhuang.hmcl.game.HMCLGameRepository;
+import org.jackhuang.hmcl.util.StringUtils;
+import org.jackhuang.hmcl.ui.construct.PromptDialogPane;
+import org.jackhuang.hmcl.game.World;
 import org.jackhuang.hmcl.setting.DownloadProviders;
 import org.jackhuang.hmcl.setting.GameDirectoryManager;
 import org.jackhuang.hmcl.task.FileDownloadTask;
@@ -67,6 +70,7 @@ import org.jackhuang.hmcl.util.versioning.GameVersionNumber;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.function.Supplier;
 
@@ -79,6 +83,9 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
             (downloadProvider, repository, version, mod, file) -> download(downloadProvider, repository, version, file, "mods");
     public static final org.jackhuang.hmcl.ui.instances.DownloadPage.DownloadCallback FOR_RESOURCE_PACK =
             (downloadProvider, repository, version, pack, file) -> download(downloadProvider, repository, version, file, "resourcepacks");
+    /// FSL: data packs go into a world's `datapacks` folder, so the player picks the world first.
+    public static final org.jackhuang.hmcl.ui.instances.DownloadPage.DownloadCallback FOR_DATAPACK =
+            (downloadProvider, repository, version, pack, file) -> downloadDataPack(downloadProvider, repository, version, file);
     public static final org.jackhuang.hmcl.ui.instances.DownloadPage.DownloadCallback FOR_SHADER =
             (downloadProvider, repository, version, shader, file) -> download(downloadProvider, repository, version, file, "shaderpacks");
 
@@ -89,6 +96,7 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
     private final TabHeader.Tab<DownloadListPage> modpackTab = new TabHeader.Tab<>("modpackTab");
     private final TabHeader.Tab<DownloadListPage> resourcePackTab = new TabHeader.Tab<>("resourcePackTab");
     private final TabHeader.Tab<DownloadListPage> shaderTab = new TabHeader.Tab<>("shaderTab");
+    private final TabHeader.Tab<DownloadListPage> dataPackTab = new TabHeader.Tab<>("dataPackTab");
     private final TabHeader.Tab<DownloadListPage> worldTab = new TabHeader.Tab<>("worldTab");
     private final TransitionPane transitionPane = new TransitionPane();
     private final DownloadNavigator versionPageNavigator = new DownloadNavigator();
@@ -116,8 +124,9 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
         modTab.setNodeSupplier(loadVersionFor(() -> HMCLLocalizedDownloadListPage.ofMod(FOR_MOD, true)));
         resourcePackTab.setNodeSupplier(loadVersionFor(() -> HMCLLocalizedDownloadListPage.ofResourcePack(FOR_RESOURCE_PACK, true)));
         shaderTab.setNodeSupplier(loadVersionFor(() -> HMCLLocalizedDownloadListPage.ofShaderPack(FOR_SHADER, true)));
+        dataPackTab.setNodeSupplier(loadVersionFor(() -> HMCLLocalizedDownloadListPage.ofDataPack(FOR_DATAPACK, true)));
         worldTab.setNodeSupplier(loadVersionFor(() -> new DownloadListPage(RemoteAddon.Type.WORLD, CurseForgeRemoteAddonRepository.getInstance())));
-        tab = new TabHeader(transitionPane, newGameTab, modpackTab, modTab, resourcePackTab, shaderTab, worldTab);
+        tab = new TabHeader(transitionPane, newGameTab, modpackTab, modTab, resourcePackTab, shaderTab, dataPackTab, worldTab);
 
         GameDirectoryManager.registerVersionsListener(this::loadVersions);
 
@@ -140,6 +149,7 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
                 .add(modTab, i18n("mods"), SVG.EXTENSION)
                 .add(resourcePackTab, i18n("resourcepack"), SVG.TEXTURE)
                 .add(shaderTab, i18n("download.shader"), SVG.WB_SUNNY)
+                .add(dataPackTab, i18n("datapack"), SVG.SCHEMA)
                 .add(worldTab, i18n("world"), SVG.PUBLIC);
 
         // FSL: no "下载 / 一站搞定" heading (the title bar already says 下载); tabs sit at the top
@@ -175,8 +185,40 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
                 : repository.getSelectedInstance();
         Path runDirectory = instance != null ? instance.getRunDirectory() : repository.getBaseDirectory();
 
-        var targetPath = runDirectory.resolve(subdirectoryName);
+        downloadTo(downloadProvider, runDirectory.resolve(subdirectoryName), file);
+    }
 
+    /// FSL: asks which world of the instance gets the data pack, then downloads it into that
+    /// world's `datapacks` folder.
+    private static void downloadDataPack(DownloadProvider downloadProvider, HMCLGameRepository repository,
+                                         @Nullable GameInstanceID instanceId, RemoteAddon.Version file) {
+        @Nullable HMCLGameInstance instance = instanceId != null
+                ? repository.findInstance(instanceId)
+                : repository.getSelectedInstance();
+        Path savesDir = instance != null ? instance.getSavesDirectory() : repository.getBaseDirectory().resolve("saves");
+        List<World> worlds = World.getWorlds(savesDir);
+        if (worlds.isEmpty()) {
+            Controllers.dialog(i18n("fsl.datapack.no_world"), null, MessageDialogPane.MessageType.WARNING);
+            return;
+        }
+
+        String[] names = worlds.stream()
+                .map(world -> StringUtils.isBlank(world.getWorldName())
+                        ? world.getFileName()
+                        : world.getWorldName() + " (" + world.getFileName() + ")")
+                .toArray(String[]::new);
+        PromptDialogPane.Builder.CandidatesQuestion question =
+                new PromptDialogPane.Builder.CandidatesQuestion(i18n("fsl.datapack.world"), names);
+        Controllers.prompt(new PromptDialogPane.Builder(i18n("fsl.datapack.choose_world"), (answers, handler) -> {
+            Integer index = question.getValue();
+            World world = worlds.get(index == null ? 0 : index);
+            handler.resolve();
+            downloadTo(downloadProvider, world.getFile().resolve("datapacks"), file);
+        }).addQuestion(question));
+    }
+
+    /// Asks for a file name and downloads `file` into `targetPath`.
+    private static void downloadTo(DownloadProvider downloadProvider, Path targetPath, RemoteAddon.Version file) {
         FileNameSet existingPaths;
         try {
             existingPaths = FileNameSet.list(targetPath, null);
@@ -223,6 +265,9 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
                     if (shaderTab.isInitialized()) {
                         shaderTab.getNode().loadInstance(HMCLGameInstance.Optional.empty(repository));
                     }
+                    if (dataPackTab.isInitialized()) {
+                        dataPackTab.getNode().loadInstance(HMCLGameInstance.Optional.empty(repository));
+                    }
                     if (worldTab.isInitialized()) {
                         worldTab.getNode().loadInstance(HMCLGameInstance.Optional.empty(repository));
                     }
@@ -264,6 +309,7 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
             case RESOURCE_PACK -> resourcePackTab;
             case SHADER_PACK -> shaderTab;
             case WORLD -> worldTab;
+            case DATAPACK -> dataPackTab;
             default -> throw new IllegalArgumentException("No download tab for " + type);
         };
     }

@@ -104,6 +104,7 @@ public final class ModrinthRemoteAddonRepository implements RemoteAddonRepositor
             case "modpack" -> RemoteAddon.Type.MODPACK;
             case "resourcepack" -> RemoteAddon.Type.RESOURCE_PACK;
             case "shader" -> RemoteAddon.Type.SHADER_PACK;
+            case "datapack" -> RemoteAddon.Type.DATAPACK;
             case "mod" -> RemoteAddon.Type.MOD;
             default -> null;
         };
@@ -115,6 +116,7 @@ public final class ModrinthRemoteAddonRepository implements RemoteAddonRepositor
             case MODPACK -> "modpack";
             case RESOURCE_PACK -> "resourcepack";
             case SHADER_PACK -> "shader";
+            case DATAPACK -> "datapack";
             default -> null;
         };
     }
