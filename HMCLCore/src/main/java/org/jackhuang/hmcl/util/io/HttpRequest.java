@@ -146,6 +146,11 @@ public abstract class HttpRequest {
         public String getString() throws IOException {
             return getStringWithRetry(() -> {
                 HttpURLConnection con = createConnection();
+                // FSL: ask for gzip; the response is already unpacked below. The CurseForge mirror
+                // sends search results uncompressed otherwise (580 KB, ~19 s instead of ~2 s).
+                if (con.getRequestProperty("Accept-Encoding") == null) {
+                    con.setRequestProperty("Accept-Encoding", "gzip");
+                }
                 con = resolveConnection(con);
                 checkResponseCode(con);
 
