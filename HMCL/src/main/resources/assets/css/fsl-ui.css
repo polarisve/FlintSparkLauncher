@@ -708,9 +708,8 @@
 }
 
 .fsl-account-avatar {
-    -fx-background-color: -fsl2-rail;
-    -fx-background-radius: 10;
-    -fx-padding: 4;
+    -fx-background-color: transparent;
+    -fx-padding: 0;
 }
 
 .fsl-account-item .two-line-list-item .title {
