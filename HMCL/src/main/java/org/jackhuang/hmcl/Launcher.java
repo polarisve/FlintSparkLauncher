@@ -21,6 +21,7 @@ import com.sun.jna.Pointer;
 import com.sun.jna.WString;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
+import javafx.animation.PauseTransition;
 import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -42,6 +43,7 @@ import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.animation.AnimationUtils;
+import org.jackhuang.hmcl.ui.fsl.FslSplash;
 import org.jackhuang.hmcl.upgrade.UpdateChecker;
 import org.jackhuang.hmcl.upgrade.UpdateHandler;
 import org.jackhuang.hmcl.util.*;
@@ -136,17 +138,30 @@ public final class Launcher extends Application {
                 showAlert(AlertType.WARNING, i18n("fatal.illegal_char"));
             }
 
-            // runLater to ensure SettingsManager.init() finished initialization
-            Platform.runLater(() -> {
+            // FSL: like PCL, the icon appears alone in the middle of the screen first
+            FslSplash.show();
+
+            // runLater to ensure SettingsManager.init() finished initialization.
+            // FSL: a short pause instead, so the splash gets painted before the window is built
+            PauseTransition paintSplash = new PauseTransition(Duration.millis(30));
+            paintSplash.setOnFinished(event -> {
                 // When launcher visibility is set to "hide and reopen" without Platform.implicitExit = false,
                 // Stage.show() cannot work again because JavaFX Toolkit have already shut down.
                 Platform.setImplicitExit(false);
-                Controllers.initialize(primaryStage);
+                try {
+                    Controllers.initialize(primaryStage);
 
-                UpdateChecker.init();
+                    UpdateChecker.init();
+                } catch (Throwable e) {
+                    // Don't leave the always-on-top icon over the crash report
+                    FslSplash.hide(() -> {
+                    });
+                    throw e;
+                }
 
-                primaryStage.show();
+                FslSplash.hide(primaryStage::show);
             });
+            paintSplash.play();
         } catch (Throwable e) {
             CRASH_REPORTER.uncaughtException(Thread.currentThread(), e);
         }
