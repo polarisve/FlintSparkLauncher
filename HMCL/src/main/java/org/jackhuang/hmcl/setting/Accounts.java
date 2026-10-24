@@ -407,6 +407,9 @@ public final class Accounts {
 
         initialized = true;
 
+        removeDuplicateAccounts();
+        selected = selectedAccount.get();
+
         getAuthlibInjectorServers().addListener(onInvalidating(Accounts::removeDanglingAuthlibInjectorAccounts));
 
         if (selected != null) {
@@ -447,6 +450,73 @@ public final class Accounts {
 
     public static ObjectProperty<Account> selectedAccountProperty() {
         return selectedAccount;
+    }
+
+    // ==== FSL: duplicate detection ====
+
+    /// Returns whether two account entries refer to the same player.
+    ///
+    /// Every newly created account gets a fresh [AccountID], so [Account#equals] never matches a re-added account.
+    /// Microsoft accounts match by profile UUID, authlib-injector accounts by server URL + profile UUID,
+    /// and offline accounts by player name (case-insensitive).
+    public static boolean isSameAccount(Account a, Account b) {
+        if (a == b || a.equals(b))
+            return true;
+        if (a.getClass() != b.getClass())
+            return false;
+        if (a instanceof OfflineAccount)
+            return a.getProfileName().equalsIgnoreCase(b.getProfileName());
+        if (a instanceof AuthlibInjectorAccount x && b instanceof AuthlibInjectorAccount y
+                && !x.getServer().getUrl().equals(y.getServer().getUrl()))
+            return false;
+        return Objects.equals(a.getProfileID(), b.getProfileID());
+    }
+
+    /// Returns the existing entry for the same player, or `null` if there is none.
+    public static @Nullable Account findSameAccount(Account account) {
+        for (Account existing : accounts) {
+            if (isSameAccount(existing, account))
+                return existing;
+        }
+        return null;
+    }
+
+    /// Adds the account, or replaces the existing entry for the same player in place.
+    ///
+    /// @return `true` if an existing entry was replaced
+    public static boolean addOrReplaceAccount(Account account) {
+        Account existing = findSameAccount(account);
+        if (existing == null) {
+            accounts.add(account);
+            return false;
+        }
+        account.setPortable(existing.isPortable());
+        accounts.set(accounts.indexOf(existing), account);
+        return true;
+    }
+
+    /// Removes duplicate entries saved by older versions, keeping the most recently added one.
+    private static void removeDuplicateAccounts() {
+        List<Account> duplicates = new ArrayList<>();
+        for (int i = 0; i < accounts.size(); i++) {
+            for (int j = i + 1; j < accounts.size(); j++) {
+                if (isSameAccount(accounts.get(i), accounts.get(j))) {
+                    duplicates.add(accounts.get(i));
+                    break;
+                }
+            }
+        }
+        duplicates.removeIf(it -> !canRemoveAccount(it));
+        if (!duplicates.isEmpty()) {
+            LOG.info("Removing " + duplicates.size() + " duplicate account(s)");
+            Account selected = selectedAccount.get();
+            accounts.removeAll(duplicates);
+            if (selected != null && duplicates.contains(selected)) {
+                Account replacement = findSameAccount(selected);
+                if (replacement != null)
+                    selectedAccount.set(replacement);
+            }
+        }
     }
 
     // ==== authlib-injector ====

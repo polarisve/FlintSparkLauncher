@@ -42,6 +42,7 @@ import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorAccountFactory;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorServer;
 import org.jackhuang.hmcl.auth.authlibinjector.BoundAuthlibInjectorAccountFactory;
 import org.jackhuang.hmcl.auth.microsoft.MicrosoftAccountFactory;
+import org.jackhuang.hmcl.auth.offline.OfflineAccount;
 import org.jackhuang.hmcl.auth.offline.OfflineAccountFactory;
 import org.jackhuang.hmcl.auth.yggdrasil.GameProfile;
 import org.jackhuang.hmcl.auth.yggdrasil.YggdrasilService;
@@ -260,19 +261,22 @@ public class CreateAccountPane extends JFXDialogLayout implements DialogAware {
 
     /// Adds the logged-in account, selects it, and closes the dialog.
     private void completeLogin(Account account) {
-        int oldIndex = Accounts.getAccounts().indexOf(account);
-        if (oldIndex == -1) {
-            Accounts.getAccounts().add(account);
+        String toast;
+        Account existing = Accounts.findSameAccount(account);
+        if (existing instanceof OfflineAccount) {
+            // FSL: same offline name already exists; keep it (and its skin) instead of adding a duplicate
+            Accounts.setSelectedAccount(existing);
+            toast = i18n("account.exists", existing.getProfileName());
         } else {
-            // Add an already-added account by replacing the existing entry with the new credentials.
-            Accounts.getAccounts().remove(oldIndex);
-            Accounts.getAccounts().add(oldIndex, account);
+            // FSL: an already-added skin-site account gets its credentials refreshed in place
+            boolean replaced = Accounts.addOrReplaceAccount(account);
+            Accounts.setSelectedAccount(account);
+            toast = i18n(replaced ? "account.updated" : "account.methods.microsoft.added", account.getProfileName());
         }
-
-        Accounts.setSelectedAccount(account);
 
         spinner.hideSpinner();
         fireEvent(new DialogCloseEvent());
+        Controllers.showToast(toast);
     }
 
     private void onCancel() {
