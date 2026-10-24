@@ -26,10 +26,13 @@ import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
 import javafx.scene.image.Image;
 import javafx.scene.input.KeyCode;
+import javafx.collections.ObservableList;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.RowConstraints;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
@@ -79,8 +82,10 @@ import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 @NotNullByDefault
 public final class FslSearchPage extends StackPane implements DecoratorPage {
 
-    /// Results shown per section; "查看全部" shows the rest.
+    /// Results loaded per section; only the ones that fit in the card are shown, "查看全部" shows the rest.
     private static final int MAX_ROWS = 6;
+    /// Sections per row of the grid.
+    private static final int COLUMNS = 2;
 
     /// How many results each online search asks for.
     private static final int SEARCH_SIZE = 10;
@@ -114,7 +119,8 @@ public final class FslSearchPage extends StackPane implements DecoratorPage {
 
         DownloadPage downloads = Controllers.getDownloadPage();
 
-        Section instances = new Section(SVG.DEPLOYED_CODE, i18n("fsl.search.instances"), null);
+        Section instances = new Section(SVG.DEPLOYED_CODE, i18n("fsl.search.instances"),
+                () -> Controllers.navigate(Controllers.getGameListPage()));
         Section versions = new Section(SVG.STADIA_CONTROLLER, i18n("fsl.search.versions"), () -> {
             Controllers.navigate(downloads);
             downloads.showGameDownloads().searchFor(keyword);
@@ -126,17 +132,32 @@ public final class FslSearchPage extends StackPane implements DecoratorPage {
         Section worlds = addonSection(downloads, RemoteAddon.Type.WORLD, SVG.PUBLIC, i18n("world"));
         Section dataPacks = addonSection(downloads, RemoteAddon.Type.DATAPACK, SVG.SCHEMA, i18n("datapack"));
 
-        // Two columns so more results fit on screen
-        VBox left = column(instances, versions, modpacks, shaders);
-        VBox right = column(mods, resourcePacks, dataPacks, worlds);
-        HBox columns = new HBox(10, left, right);
-        columns.setPadding(new Insets(10, 12, 12, 12));
-
-        ScrollPane scrollPane = new ScrollPane(columns);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        FXUtils.smoothScrolling(scrollPane);
-        getChildren().setAll(scrollPane);
+        // FSL: every section gets an equal share of the window and nothing scrolls; each one shows
+        // as many results as fit and "查看全部" opens the rest
+        Section[] sections = {instances, mods, versions, resourcePacks, modpacks, dataPacks, shaders, worlds};
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(10, 12, 12, 12));
+        for (int c = 0; c < COLUMNS; c++) {
+            ColumnConstraints column = new ColumnConstraints();
+            column.setPercentWidth(100.0 / COLUMNS);
+            column.setHgrow(Priority.ALWAYS);
+            grid.getColumnConstraints().add(column);
+        }
+        int rowCount = (sections.length + COLUMNS - 1) / COLUMNS;
+        for (int r = 0; r < rowCount; r++) {
+            RowConstraints row = new RowConstraints();
+            row.setPercentHeight(100.0 / rowCount);
+            row.setVgrow(Priority.ALWAYS);
+            row.setFillHeight(true);
+            grid.getRowConstraints().add(row);
+        }
+        for (int i = 0; i < sections.length; i++) {
+            grid.add(sections[i].card, i % COLUMNS, i / COLUMNS);
+        }
+        grid.setMinSize(0, 0);
+        getChildren().setAll(grid);
 
         searchInstances(instances);
         searchVersions(versions, downloads);
@@ -151,18 +172,6 @@ public final class FslSearchPage extends StackPane implements DecoratorPage {
     @Override
     public ReadOnlyObjectProperty<State> stateProperty() {
         return state.getReadOnlyProperty();
-    }
-
-    /// Creates a column that shares the page width equally with the other column.
-    private static VBox column(Section... sections) {
-        VBox column = new VBox(10);
-        for (Section section : sections) {
-            column.getChildren().add(section.card);
-        }
-        column.setMinWidth(0);
-        column.setPrefWidth(0);
-        HBox.setHgrow(column, Priority.ALWAYS);
-        return column;
     }
 
     /// Creates the section for one kind of online resource.
@@ -312,10 +321,50 @@ public final class FslSearchPage extends StackPane implements DecoratorPage {
         return row;
     }
 
+    /// A vertical list that never grows its parent: it lays out children top to bottom and hides the
+    /// ones that do not fit completely, so a card shows one, two or more rows depending on its height.
+    private static final class FitList extends Region {
+        private final double spacing;
+
+        FitList(double spacing) {
+            this.spacing = spacing;
+            setMinSize(0, 0);
+            setPrefSize(0, 0);
+            setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        }
+
+        ObservableList<Node> rows() {
+            return getChildren();
+        }
+
+        @Override
+        protected void layoutChildren() {
+            Insets insets = getInsets();
+            double x = insets.getLeft();
+            double width = Math.max(0, getWidth() - insets.getLeft() - insets.getRight());
+            double bottom = getHeight() - insets.getBottom();
+            double y = insets.getTop();
+            boolean full = false;
+            for (Node child : getChildren()) {
+                double height = child.prefHeight(width);
+                if (!full && y + height <= bottom + 0.5) {
+                    child.setVisible(true);
+                    child.resizeRelocate(x, y, width, height);
+                    y += height + spacing;
+                } else {
+                    // Hidden rows are not clickable either
+                    full = true;
+                    child.setVisible(false);
+                    child.resizeRelocate(x, y, width, 0);
+                }
+            }
+        }
+    }
+
     /// One result group: a card with a header and a list that shows loading, results, or an error.
     private static final class Section {
         private final VBox card = Fsl.card();
-        private final VBox body = new VBox(2);
+        private final FitList body = new FitList(2);
 
         Section(SVG icon, String name, @Nullable Runnable viewAll) {
             Node headerIcon = icon.createIcon(16);
@@ -331,18 +380,21 @@ public final class FslSearchPage extends StackPane implements DecoratorPage {
                 header.getChildren().add(more);
             }
             card.getChildren().setAll(header, body);
-            card.setMinWidth(0);
+            VBox.setVgrow(body, Priority.ALWAYS);
+            card.setMinSize(0, 0);
+            card.setPrefSize(0, 0);
+            card.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         }
 
         void loading() {
-            body.getChildren().setAll(Fsl.muted(i18n("fsl.search.loading")), Fsl.progress(-1));
+            body.rows().setAll(Fsl.muted(i18n("fsl.search.loading")), Fsl.progress(-1));
         }
 
         void show(List<Node> rows) {
             if (rows.isEmpty()) {
-                body.getChildren().setAll(Fsl.muted(i18n("search.no_results_found")));
+                body.rows().setAll(Fsl.muted(i18n("search.no_results_found")));
             } else {
-                body.getChildren().setAll(rows);
+                body.rows().setAll(rows);
             }
         }
 
@@ -350,7 +402,7 @@ public final class FslSearchPage extends StackPane implements DecoratorPage {
             Label label = Fsl.muted(i18n("fsl.search.failed"));
             label.setCursor(Cursor.HAND);
             FXUtils.onClicked(label, retry);
-            body.getChildren().setAll(label);
+            body.rows().setAll(label);
         }
     }
 }
