@@ -415,6 +415,7 @@ public final class CurseForgeRemoteAddonRepository implements RemoteAddonReposit
             case SECTION_WORLD -> RemoteAddon.Type.WORLD;
             case SECTION_CUSTOMIZATION -> RemoteAddon.Type.CUSTOMIZATION;
             case SECTION_SHADER -> RemoteAddon.Type.SHADER_PACK;
+            case SECTION_DATAPACK -> RemoteAddon.Type.DATAPACK;
             case SECTION_MOD -> RemoteAddon.Type.MOD;
             default -> null;
         };
@@ -427,6 +428,7 @@ public final class CurseForgeRemoteAddonRepository implements RemoteAddonReposit
             case RESOURCE_PACK -> SECTION_RESOURCE_PACK;
             case SHADER_PACK -> SECTION_SHADER;
             case WORLD -> SECTION_WORLD;
+            case DATAPACK -> SECTION_DATAPACK;
             case CUSTOMIZATION -> SECTION_CUSTOMIZATION;
             default -> -1;
         };

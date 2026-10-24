@@ -59,6 +59,13 @@ public final class HMCLLocalizedDownloadListPage extends DownloadListPage {
         return page;
     }
 
+    /// FSL: data packs from Modrinth and CurseForge together.
+    public static DownloadListPage ofDataPack(DownloadPage.DownloadCallback callback, boolean instanceSelection) {
+        var page = new HMCLLocalizedDownloadListPage(callback, instanceSelection, RemoteAddon.Type.DATAPACK, true, true);
+        page.supportChinese.set(false);
+        return page;
+    }
+
     private HMCLLocalizedDownloadListPage(DownloadPage.DownloadCallback callback, boolean instanceSelection, RemoteAddon.Type type, boolean curseForge, boolean modrinth) {
         super(type, new Repository(), callback, instanceSelection);
         ((Repository) repository).downloadSource.bind(downloadSource);

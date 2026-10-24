@@ -81,7 +81,11 @@ public class DownloadPage extends Control implements DecoratorPage {
         this.page = page;
         this.repository = page.repository;
         this.addon = addon;
-        this.type = Objects.requireNonNullElse(addon.type(), page.type);
+        // FSL: in the data pack list, Modrinth often reports a project as "mod" (it ships both);
+        // keep treating it as a data pack so the right files and install target are used
+        this.type = page.type == RemoteAddon.Type.DATAPACK
+                ? RemoteAddon.Type.DATAPACK
+                : Objects.requireNonNullElse(addon.type(), page.type);
         @Nullable AddonProjectInfoRegistry<?> registry = AddonProjectInfoRegistry.getByAddonType(this.type);
         this.mod = registry != null ? registry.getInfoByCurseForgeId(addon.slug()) : null;
         this.instanceReference = instanceReference;
@@ -97,6 +101,11 @@ public class DownloadPage extends Control implements DecoratorPage {
 
         Task.supplyAsync(() -> {
             Stream<RemoteAddon.Version> versions = addon.data().loadVersions(repository, page.getDownloadProvider());
+            if (type == RemoteAddon.Type.DATAPACK) {
+                // FSL: projects that ship a mod and a data pack: only list the data pack files
+                versions = versions.filter(version -> version.source() != RemoteAddon.Source.MODRINTH
+                        || version.loaders().stream().anyMatch(loader -> "datapack".equalsIgnoreCase(loader.name())));
+            }
             return sortVersions(versions);
         }).whenComplete(Schedulers.javafx(), (result, exception) -> {
             if (exception == null) {
@@ -525,6 +534,7 @@ public class DownloadPage extends Control implements DecoratorPage {
                 case MODPACK -> "modpack.download.title";
                 case RESOURCE_PACK -> "resourcepack.download.title";
                 case SHADER_PACK -> "shaderpack.download.title";
+                case DATAPACK -> "fsl.datapack.download.title";
                 default -> "mods.download.title";
             };
             this.setHeading(new HBox(new Label(i18n(title, version.name()))));
@@ -566,7 +576,9 @@ public class DownloadPage extends Control implements DecoratorPage {
 
             JFXButton downloadButton = null;
             if (selfPage.callback != null) {
-                downloadButton = new JFXButton(type == RemoteAddon.Type.MODPACK ? i18n("install.modpack") : i18n("mods.install"));
+                downloadButton = new JFXButton(type == RemoteAddon.Type.MODPACK ? i18n("install.modpack")
+                        : type == RemoteAddon.Type.DATAPACK ? i18n("fsl.datapack.install")
+                        : i18n("mods.install"));
                 downloadButton.getStyleClass().add("dialog-accept");
                 downloadButton.setOnAction(e -> {
                     if (type == RemoteAddon.Type.MODPACK || !spinnerPane.isLoading() && spinnerPane.getFailedReason() == null) {

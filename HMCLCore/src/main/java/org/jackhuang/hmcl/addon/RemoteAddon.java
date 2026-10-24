@@ -160,6 +160,8 @@ public record RemoteAddon(String slug, String author, String title, String descr
         RESOURCE_PACK,
         SHADER_PACK,
         WORLD,
+        /// FSL: data packs, installed into a world's `datapacks` folder
+        DATAPACK,
         CUSTOMIZATION
     }
 
