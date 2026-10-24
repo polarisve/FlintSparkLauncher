@@ -21,7 +21,7 @@ import org.jackhuang.hmcl.ui.construct.Navigator;
 import org.jackhuang.hmcl.ui.fsl.FslNavigationTabs;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 import org.jackhuang.hmcl.ui.fsl.ds.FslTopBar;
-import org.jackhuang.hmcl.ui.fsl.FslGlobalSearch;
+import org.jackhuang.hmcl.ui.fsl.FslSearchPage;
 
 import com.jfoenix.controls.JFXButton;
 import javafx.animation.Interpolator;
@@ -151,10 +151,10 @@ final class MainWindowPane extends StackPane {
         // page title that exceeded the window, so the whole window content was laid out wider than
         // the window, centered, and cut off on both sides. Let everything shrink to the window.
         titleBar.setMinWidth(0);
-        // FSL: global search left of the window buttons. Enter or the magnifier opens a menu with
-        // matching instances and "search in 游戏版本 / 整合包 / 模组 / ..." choices.
-        FslTopBar search = new FslTopBar(i18n("fsl.search.prompt"), (keyword, anchor) ->
-                FslGlobalSearch.show(anchor, keyword, () -> decorator.getNavigator().clear()));
+        // FSL: global search left of the window buttons. The magnifier opens one page with every
+        // kind of result (instances, game versions, modpacks, mods, resource packs, shaders, worlds).
+        FslTopBar search = new FslTopBar(i18n("fsl.search.prompt"),
+                keyword -> FslSearchPage.open(keyword, () -> decorator.getNavigator().clear()));
         search.setPickOnBounds(false);
         search.setStyle("-fx-padding: 0 8 0 0;");
         HBox right = new HBox(search, windowButtons);
