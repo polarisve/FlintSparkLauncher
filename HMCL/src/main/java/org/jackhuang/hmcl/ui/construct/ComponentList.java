@@ -149,6 +149,7 @@ public class ComponentList extends Control implements NoPaddingComponent {
 
         {
             Label advanced = new Label(title);
+            advanced.getStyleClass().add("options-list-title"); // FSL: styled section heading
             node.getChildren().setAll(advanced);
         }
 
