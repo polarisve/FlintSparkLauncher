@@ -28,13 +28,15 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import org.jackhuang.hmcl.ui.SVG;
+import org.jackhuang.hmcl.ui.decorator.Decorator;
 import org.jetbrains.annotations.NotNullByDefault;
 
 import java.util.function.BiConsumer;
 
 /// FSL top bar: page title on the left, global search and trailing actions on the right.
 ///
-/// Pressing Enter or the magnifier button hands the query to the search handler; Esc clears it.
+/// Only the magnifier button hands the query to the search handler. Enter does nothing (it used to
+/// reach the home page's launch button and start the game); Esc clears the box.
 @NotNullByDefault
 public final class FslTopBar extends HBox {
 
@@ -51,7 +53,7 @@ public final class FslTopBar extends HBox {
     ///
     /// @param searchPrompt placeholder text for the search box
     /// @param onSearch     called with the trimmed query and the search box (to place a popup under)
-    ///                     when Enter or the magnifier is pressed
+    ///                     when the magnifier is pressed
     public FslTopBar(String searchPrompt, BiConsumer<String, Node> onSearch) {
         getStyleClass().add("fsl-topbar");
 
@@ -63,7 +65,7 @@ public final class FslTopBar extends HBox {
         // Clicking still focuses it; this only stops it grabbing focus when the window opens
         search.setFocusTraversable(false);
 
-        // Magnifier inside the right end of the box; clicking it searches like Enter
+        // Magnifier inside the right end of the box; the only way to start a search
         JFXButton magnifier = new JFXButton();
         magnifier.getStyleClass().add("fsl-search-button");
         magnifier.setGraphic(SVG.SEARCH.createIcon(14));
@@ -83,9 +85,11 @@ public final class FslTopBar extends HBox {
         };
         magnifier.setOnAction(e -> submit.run());
 
+        // Keep the box's own keys (Backspace, Delete, arrows...) instead of rerouting them to the page
+        search.getProperties().put(Decorator.KEEP_KEY_EVENTS, Boolean.TRUE);
         search.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ENTER) {
-                submit.run();
+                // Swallow Enter so it never triggers the default (launch) button
                 e.consume();
             } else if (e.getCode() == KeyCode.ESCAPE) {
                 search.clear();

@@ -32,7 +32,6 @@ import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.effect.BlurType;
 import javafx.scene.effect.DropShadow;
-import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -219,20 +218,25 @@ public final class FslHome {
             breathe.play();
         }
 
+        // Zoom only while the pointer is on one of the buttons. Listening on the whole row made it
+        // grow as soon as the pointer came near (the row and its glow are larger than the buttons).
         ScaleTransition zoom = new ScaleTransition(Duration.millis(160), launchPane);
         zoom.setInterpolator(Interpolator.EASE_OUT);
-        launchPane.addEventHandler(MouseEvent.MOUSE_ENTERED, e -> {
+        launchPane.setPickOnBounds(false);
+        javafx.beans.InvalidationListener update = o -> {
+            boolean over = launchPane.getChildrenUnmodifiable().stream().anyMatch(Node::isHover);
+            double target = over ? 1.04 : 1;
+            if (zoom.getToX() == target && launchPane.getScaleX() == target) {
+                return;
+            }
             zoom.stop();
-            zoom.setToX(1.04);
-            zoom.setToY(1.04);
+            zoom.setToX(target);
+            zoom.setToY(target);
             zoom.playFromStart();
-        });
-        launchPane.addEventHandler(MouseEvent.MOUSE_EXITED, e -> {
-            zoom.stop();
-            zoom.setToX(1);
-            zoom.setToY(1);
-            zoom.playFromStart();
-        });
+        };
+        for (Node child : launchPane.getChildrenUnmodifiable()) {
+            child.hoverProperty().addListener(update);
+        }
     }
 
     /// Slides and fades `node` in from the left the first time it is shown.

@@ -1137,6 +1137,10 @@ public final class Decorator {
     }
 
     /// Installs keyboard, full-screen, and auxiliary mouse-button routing.
+    /// FSL: node property marking a title-bar control (the search box) whose key events are not
+    /// rerouted to the current page while no dialog is open.
+    public static final String KEEP_KEY_EVENTS = "fsl.keepKeyEvents";
+
     private void setupInputRouting() {
         root.addEventFilter(KeyEvent.ANY, event -> {
             if (!(event.getTarget() instanceof Node target)) {
@@ -1173,6 +1177,16 @@ public final class Decorator {
             for (@Nullable Node node = target; node != null; node = node.getParent()) {
                 if (node == newTarget) {
                     return;
+                }
+            }
+
+            // FSL: typing in the title-bar search box must stay there. Rerouting its keys to the
+            // page broke Backspace/Delete and sent Enter to the home page's launch button.
+            if (newTarget == navigator.getCurrentPage()) {
+                for (@Nullable Node node = target; node != null; node = node.getParent()) {
+                    if (node.getProperties().containsKey(KEEP_KEY_EVENTS)) {
+                        return;
+                    }
                 }
             }
 
