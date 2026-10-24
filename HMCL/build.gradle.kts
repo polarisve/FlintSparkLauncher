@@ -29,7 +29,8 @@ val projectConfig = PropertiesUtils.load(rootProject.file("config/project.proper
 
 val isOfficial = JenkinsUtils.IS_ON_CI || GitHubActionUtils.IS_ON_OFFICIAL_REPO
 
-val versionType = System.getenv("VERSION_TYPE") ?: if (isOfficial) "nightly" else "unofficial"
+// FSL: local builds are releases (stable channel) unless VERSION_TYPE says otherwise
+val versionType = System.getenv("VERSION_TYPE") ?: if (isOfficial) "nightly" else "stable"
 val versionRoot = System.getenv("VERSION_ROOT") ?: projectConfig.getProperty("versionRoot") ?: "3"
 
 // FSL: keys come from env vars, or from the git-ignored fsl-secrets.properties in the project root
@@ -54,8 +55,9 @@ if (buildNumber != null) {
     }
 } else {
     val shortCommit = System.getenv("GITHUB_SHA")?.lowercase()?.substring(0, 7)
+    // FSL: a local build is the release itself, e.g. "1.0"
     version = if (shortCommit.isNullOrBlank()) {
-        "$versionRoot.SNAPSHOT"
+        versionRoot
     } else if (isOfficial) {
         "$versionRoot.dev-$shortCommit"
     } else {
@@ -226,7 +228,7 @@ tasks.shadowJar {
     }
 
     manifest.attributes(
-        "Created-By" to "Copyright(c) 2013-2025 huangyuhui.",
+        "Created-By" to "Copyright(c) 2026 polarisve. Based on HMCL, Copyright(c) 2013-2025 huangyuhui.",
         "Implementation-Version" to project.version.toString(),
         "Main-Class" to "org.jackhuang.hmcl.Main",
         "Multi-Release" to "true",
