@@ -879,3 +879,40 @@
     -fx-background-color: -fsl2-rail;
     -fx-background-radius: 10;
 }
+
+/* ---------- Unified hover (FSL) ----------
+ * Anything you can point at gets the same look as the selected account:
+ * a purple outline and a light purple background, instead of a dark highlight.
+ * Borders are reserved as transparent beforehand so nothing shifts on hover. */
+.fsl-account-card, .fsl-page-side .advanced-list-item > .rippler-container > .container {
+    -fx-border-color: transparent;
+    -fx-border-width: 1;
+    -fx-border-radius: 10;
+}
+
+.fsl-account-item:hover,
+.fsl-card-clickable:hover,
+.fsl-instance-line:hover,
+.fsl-addon-card:hover,
+.card:hover,
+.md-list-cell:hover {
+    -fx-background-color: #453A64;
+    -fx-border-color: -fsl2-primary;
+    -fx-effect: null;
+}
+
+.fsl-account-card:hover,
+.fsl-page-side .advanced-list-item:hover > .rippler-container > .container {
+    -fx-background-color: rgba(167, 139, 250, 0.16);
+    -fx-border-color: -fsl2-primary;
+}
+
+/* Selected side item stays solid purple, no extra outline */
+.fsl-page-side .advanced-list-item:selected > .rippler-container > .container {
+    -fx-border-color: transparent;
+}
+
+/* Rows inside a settings card: light purple, outline drawn inside so the card edge stays clean */
+.options-list-item:hover, .options-sublist .options-list-item:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.14);
+}
