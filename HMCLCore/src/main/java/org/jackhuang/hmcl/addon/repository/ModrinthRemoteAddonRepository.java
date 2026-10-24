@@ -186,7 +186,7 @@ public final class ModrinthRemoteAddonRepository implements RemoteAddonRepositor
                     LOG.info("Fetching " + candidate.displayUrl());
                     Response<ProjectSearchResult> response = HttpRequest.GET(candidate.displayUrl())
                             .getJson(Response.typeOf(ProjectSearchResult.class));
-                    return new SearchResult(response.getHits().stream().map(ProjectSearchResult::toAddon), (int) Math.ceil((double) response.totalHits / pageSize));
+                    return new SearchResult(response.getHits().stream().map(ProjectSearchResult::toAddon), (int) Math.ceil((double) response.totalHits / pageSize), response.totalHits);
                 } catch (IOException e) {
                     LOG.warning("Failed to search addons: " + candidate, e);
 

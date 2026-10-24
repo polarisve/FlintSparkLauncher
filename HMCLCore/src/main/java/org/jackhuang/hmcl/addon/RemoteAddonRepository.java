@@ -72,9 +72,14 @@ public interface RemoteAddonRepository {
         DESC
     }
 
-    record SearchResult(Stream<RemoteAddon> results, int totalPages) {
+    /// @param totalCount FSL: how many results the search has in total, or `-1` when unknown
+    record SearchResult(Stream<RemoteAddon> results, int totalPages, long totalCount) {
+        public SearchResult(Stream<RemoteAddon> results, int totalPages) {
+            this(results, totalPages, -1);
+        }
+
         public static SearchResult empty() {
-            return new SearchResult(Stream.empty(), 0);
+            return new SearchResult(Stream.empty(), 0, 0);
         }
 
     }

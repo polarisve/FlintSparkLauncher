@@ -169,7 +169,8 @@ public final class CurseForgeRemoteAddonRepository implements RemoteAddonReposit
             }
 
             if (response != null)
-                return new SearchResult(response.data().stream().map(CurseAddon::toAddon), calculateTotalPages(response, pageSize));
+                return new SearchResult(response.data().stream().map(CurseAddon::toAddon), calculateTotalPages(response, pageSize),
+                        response.pagination != null ? response.pagination.totalCount() : -1);
 
             throw exception != null ? exception : new NoCandidatesException();
         } finally {

@@ -77,6 +77,7 @@ public abstract class LocalizedRemoteAddonRepository implements RemoteAddonRepos
 
         RemoteAddon[] searchResultArray = new RemoteAddon[pageSize];
         int totalPages, chineseIndex = 0, englishIndex = pageSize - 1;
+        long totalCount;
         {
             SearchResult searchResult = null;
             List<RemoteAddon> remoteAddons = List.of();
@@ -102,6 +103,7 @@ public abstract class LocalizedRemoteAddonRepository implements RemoteAddonRepos
                 }
             }
             totalPages = searchResult.totalPages();
+            totalCount = searchResult.totalCount();
         }
 
         StringUtils.LevCalculator levCalculator = new StringUtils.LevCalculator();
@@ -121,7 +123,7 @@ public abstract class LocalizedRemoteAddonRepository implements RemoteAddonRepos
                 }
             }
             return Pair.pair(remoteMod, l);
-        }).sorted(Comparator.comparingInt(Pair::getValue)).map(Pair::getKey), Arrays.stream(searchResultArray, englishIndex + 1, searchResultArray.length)), totalPages);
+        }).sorted(Comparator.comparingInt(Pair::getValue)).map(Pair::getKey), Arrays.stream(searchResultArray, englishIndex + 1, searchResultArray.length)), totalPages, totalCount);
     }
 
     @Override
