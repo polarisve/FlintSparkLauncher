@@ -21,9 +21,11 @@ import com.jfoenix.controls.JFXButton;
 import javafx.css.PseudoClass;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.control.Label;
 import javafx.scene.control.SkinBase;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
 import org.jackhuang.hmcl.setting.GameDirectoryManager;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.SVG;
@@ -82,6 +84,12 @@ public class GameDirectoryListItemSkin extends SkinBase<GameDirectoryListItem> {
 
         item.titleProperty().set(GameDirectoryManager.getGameDirectoryDisplayName(skinnable.getGameDirectory()));
         item.subtitleProperty().set(skinnable.getGameDirectory().getPath().toString());
+        // FSL: the 200px left column used to cut the name and path off with "..."; wrap them instead
+        for (Label label : new Label[]{item.getTitleLabel(), item.getSubtitleLabel()}) {
+            label.setWrapText(true);
+            label.setMinHeight(Region.USE_PREF_SIZE);
+        }
+        item.setMinWidth(0);
 
         getChildren().setAll(container);
     }

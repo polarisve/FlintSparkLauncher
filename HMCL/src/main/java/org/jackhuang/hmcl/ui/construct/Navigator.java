@@ -48,6 +48,7 @@ public class Navigator extends TransitionPane {
     private boolean initialized = false;
 
     public void init(Node init) {
+        fitToWindow(init);
         stack.push(init);
         backable.set(canGoBack());
         setContent(init, ContainerAnimations.NONE);
@@ -56,6 +57,16 @@ public class Navigator extends TransitionPane {
         if (init instanceof PageAware) ((PageAware) init).onPageShown();
 
         initialized = true;
+    }
+
+    /// FSL: lets a page shrink to the window width. Without this, pages whose content asks for
+    /// more width than the window has (long descriptions, many tags) were centered and cut off
+    /// on both sides.
+    private static void fitToWindow(Node node) {
+        if (node instanceof Region region) {
+            region.setMinWidth(0);
+            region.setMinHeight(0);
+        }
     }
 
     public void navigate(Node node, AnimationProducer animationProducer) {
@@ -82,6 +93,7 @@ public class Navigator extends TransitionPane {
         node.fireEvent(navigating);
 
         node.getProperties().put("hmcl.navigator.animation", animationProducer);
+        fitToWindow(node);
         setContent(node, animationProducer, duration, interpolator);
 
         NavigationEvent navigated = new NavigationEvent(this, node, Navigation.NavigationDirection.NEXT, NavigationEvent.NAVIGATED);

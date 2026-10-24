@@ -207,9 +207,13 @@ public class DownloadPage extends Control implements DecoratorPage {
             VBox pane = new VBox(8);
             pane.getStyleClass().add("gray-background");
             pane.setPadding(new Insets(10));
+            // FSL: never let long descriptions/tags make the page wider than the window
+            // (it used to overflow and get cut off on both sides)
+            pane.setMinWidth(0);
 
             HBox descriptionPane = new HBox(8);
             descriptionPane.setMinHeight(Region.USE_PREF_SIZE);
+            descriptionPane.setMinWidth(0);
             descriptionPane.setAlignment(Pos.CENTER);
             pane.getChildren().add(descriptionPane);
             descriptionPane.getStyleClass().add("card-non-transparent");
@@ -231,6 +235,8 @@ public class DownloadPage extends Control implements DecoratorPage {
                         .map(category -> getSkinnable().page.getLocalizedCategory(category, null))
                         .forEach(content::addTag);
                 content.getFirstLine().setMinWidth(0);
+                content.setMinWidth(0);
+                content.getSubtitleLabel().setMinWidth(0);
                 descriptionPane.getChildren().add(content);
 
                 @Nullable String mcmodUrl = mod != null ? mod.mcmodUrl() : null;
@@ -266,6 +272,10 @@ public class DownloadPage extends Control implements DecoratorPage {
                 FXUtils.smoothScrolling(scrollPane);
                 scrollPane.setFitToWidth(true);
                 scrollPane.setFitToHeight(true);
+                scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+                scrollPane.setMinWidth(0);
+                list.setMinWidth(0);
+                spinnerPane.setMinWidth(0);
                 FXUtils.setOverflowHidden(scrollPane, 8);
                 StackPane.setAlignment(scrollPane, Pos.TOP_CENTER);
                 spinnerPane.setContent(scrollPane);
@@ -442,6 +452,7 @@ public class DownloadPage extends Control implements DecoratorPage {
                 descPane.setPadding(new Insets(0, 8, 0, 8));
                 descPane.setAlignment(Pos.CENTER_LEFT);
                 descPane.setMouseTransparent(true);
+                descPane.setMinWidth(0);
 
                 {
                     StackPane graphicPane = new StackPane();
@@ -449,6 +460,8 @@ public class DownloadPage extends Control implements DecoratorPage {
                     HBox.setHgrow(content, Priority.ALWAYS);
                     content.setTitle(dataItem.name());
                     content.setSubtitle(I18n.formatDateTime(dataItem.datePublished()));
+                    content.setMinWidth(0);
+                    content.getFirstLine().setMinWidth(0);
 
                     @Nullable SVG svg = null;
                     @Nullable String styleClass = null;
@@ -498,6 +511,8 @@ public class DownloadPage extends Control implements DecoratorPage {
 
             // Workaround for https://github.com/HMCL-dev/HMCL/issues/2129
             this.setMinHeight(50);
+            pane.setMinWidth(0);
+            this.setMinWidth(0);
         }
     }
 

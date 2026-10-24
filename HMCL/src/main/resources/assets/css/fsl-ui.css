@@ -967,3 +967,66 @@
 .fsl-page-side .advanced-list-item:selected:hover .svg {
     -fx-fill: -fsl2-on-primary;
 }
+
+/* ---------- No sideways scrolling in side columns ----------
+ * Lists in the 200px left column (instance folders, account methods...) used to overflow and
+ * show a horizontal scrollbar. Fit them to the column width; long names get "..." instead. */
+.fsl-page-side .scroll-pane {
+    -fx-fit-to-width: true;
+    -fx-hbar-policy: never;
+}
+
+.fsl-page-side .game-directory-list-item,
+.fsl-page-side .advanced-list-item {
+    -fx-max-width: Infinity;
+}
+
+/* Title bar must fit a 960px-wide window: tabs (434) + page title + search + window buttons.
+ * A 220px search box pushed the row past the window width. */
+.fsl-search {
+    -fx-pref-width: 150;
+}
+
+/* ---------- Only options light up, never the frame around them ----------
+ * Instance list, mod lists and expandable setting groups sit inside one big options-list-item
+ * (or a .card search box). Pointing at a row inside also counted as hovering that outer frame,
+ * so the whole background lit up together with the row. Frames that hold other items now
+ * stay as they are; the rows inside keep their own hover. */
+.options-list-item.no-padding:hover,
+.no-padding .options-list-item:hover,
+.options-list-item.options-sublist-wrapper:hover {
+    -fx-background-color: transparent;
+}
+
+.card:hover,
+.card-non-transparent:hover {
+    -fx-background-color: -fsl2-card;
+    -fx-border-color: -fsl2-card-line;
+    -fx-effect: null;
+}
+
+/* Cards that are themselves a choice (modpack source buttons, mod results) still light up */
+.jfx-button.card:hover,
+.fsl-addon-card:hover {
+    -fx-background-color: #3E3460;
+    -fx-border-color: #C4B1FF;
+}
+
+/* Instance folders in the left column: show the whole name and path on several lines */
+.fsl-page-side .game-directory-list-item > .rippler-container > BorderPane {
+    -fx-padding: 8 4 8 8;
+}
+
+/* The header row of an expandable settings group is itself an option: it still lights up */
+.options-sublist-header:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.14);
+}
+
+/* Options inside an expanded settings group are real choices: keep their hover */
+.options-sublist .options-list-item:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.14);
+}
+
+.options-sublist .options-list-item.no-padding:hover {
+    -fx-background-color: transparent;
+}
