@@ -408,14 +408,17 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
 
     /// Adds the logged-in account, selects it, and completes the login callback.
     private void completeLogin(MicrosoftAccount account) {
-        if (accountToRelogin != null) Accounts.getAccounts().remove(accountToRelogin);
-
-        int oldIndex = Accounts.getAccounts().indexOf(account);
-        if (oldIndex == -1) {
-            Accounts.getAccounts().add(account);
+        boolean replaced;
+        int reloginIndex = accountToRelogin != null ? Accounts.getAccounts().indexOf(accountToRelogin) : -1;
+        if (reloginIndex != -1 && Accounts.isSameAccount(accountToRelogin, account)) {
+            // keep the entry where it was
+            account.setPortable(accountToRelogin.isPortable());
+            Accounts.getAccounts().set(reloginIndex, account);
+            replaced = true;
         } else {
-            Accounts.getAccounts().remove(oldIndex);
-            Accounts.getAccounts().add(oldIndex, account);
+            if (accountToRelogin != null) Accounts.getAccounts().remove(accountToRelogin);
+            // FSL: logging into an already-added account updates it instead of adding a duplicate
+            replaced = Accounts.addOrReplaceAccount(account);
         }
 
         Accounts.setSelectedAccount(account);
@@ -430,7 +433,7 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
         }
         fireEvent(new DialogCloseEvent());
         // FSL: make it obvious the account was added
-        Controllers.showToast(i18n("account.methods.microsoft.added", account.getProfileName()));
+        Controllers.showToast(i18n(replaced ? "account.updated" : "account.methods.microsoft.added", account.getProfileName()));
     }
 
     private sealed interface Step {
