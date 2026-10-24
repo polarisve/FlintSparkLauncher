@@ -46,6 +46,7 @@ import org.jackhuang.hmcl.ui.WeakListenerHolder;
 import org.jackhuang.hmcl.ui.animation.TransitionPane;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane;
 import org.jackhuang.hmcl.ui.construct.Navigator;
+import org.jackhuang.hmcl.ui.construct.PageAware;
 import org.jackhuang.hmcl.ui.construct.TabHeader;
 import org.jackhuang.hmcl.ui.construct.Validator;
 import org.jackhuang.hmcl.ui.decorator.DecoratorAnimatedPage;
@@ -120,12 +121,12 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
 
         GameDirectoryManager.registerVersionsListener(this::loadVersions);
 
-        // FSL: every time the download page is shown (from the tabs, or back from a detail page),
-        // quietly re-check the visible list for resources it is missing
+        // FSL: every time the download page is shown (from the title-bar tabs, or back from a detail
+        // page), re-check the visible tab. Switching tabs already does this through TabHeader.select.
         addEventHandler(Navigator.NavigationEvent.NAVIGATED, e -> {
             TabHeader.Tab<?> selected = tab.getSelectionModel().getSelectedItem();
-            if (selected != null && selected.getNode() instanceof DownloadListPage list) {
-                list.onPageShown();
+            if (selected != null && selected.getNode() instanceof PageAware page) {
+                page.onPageShown();
             }
         });
 

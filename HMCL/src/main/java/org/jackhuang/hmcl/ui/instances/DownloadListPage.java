@@ -265,23 +265,38 @@ public class DownloadListPage extends Control implements DecoratorPage, PageAwar
         }
     }
 
-    /// FSL: searches again with the same filters and quietly adds what the list is missing.
+    /// FSL: searches again with the same filters (spinner shown meanwhile) and adds what the list is
+    /// missing. Results already shown stay; nothing is announced.
     private void refreshQuietly(String userGameVersion, RemoteAddonRepository.Category category, int pageOffset,
                                 String searchFilter, RemoteAddonRepository.SortType sort, int forSearchID) {
+        setLoading(true);
         Task.supplyAsync(() -> FslMergedAddonRepository.withLateResults(lateAppender(forSearchID),
                         () -> repository.search(downloadProvider, type, gameVersionFor(userGameVersion), category, pageOffset, 50,
                                 searchFilter, sort, RemoteAddonRepository.SortOrder.DESC).results().toList()))
                 .whenComplete(Schedulers.javafx(), (result, exception) -> {
-                    if (exception == null && result != null && searchID == forSearchID) {
+                    // A newer search owns the spinner and the list now
+                    if (searchID != forSearchID) {
+                        return;
+                    }
+                    setLoading(false);
+                    if (exception == null && result != null) {
                         appendNew(result);
                     }
                 }).start();
     }
 
-    /// FSL: every time this list is shown again, check the sources for anything missing.
+    /// FSL: every time this list is opened (tab clicked, download page shown, back from a detail page),
+    /// check both sources again; retry if the last load failed.
     @Override
     public void onPageShown() {
-        if (!isLoading() && !isFailed() && quietRefresh != null) {
+        if (isLoading()) {
+            return;
+        }
+        if (isFailed()) {
+            if (retrySearch != null) {
+                retrySearch.run();
+            }
+        } else if (quietRefresh != null) {
             quietRefresh.run();
         }
     }
