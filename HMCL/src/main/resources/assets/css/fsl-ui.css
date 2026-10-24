@@ -1132,7 +1132,7 @@
 }
 
 /* FSL search page: one card per kind, showing how many matches it has */
-.fsl-search-card:hover, .fsl-search-card:focused {
+.fsl-search-count-card:hover, .fsl-search-count-card:focused {
     -fx-border-color: -fsl2-primary;
 }
 
