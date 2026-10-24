@@ -45,6 +45,7 @@ import org.jackhuang.hmcl.ui.SVG;
 import org.jackhuang.hmcl.ui.WeakListenerHolder;
 import org.jackhuang.hmcl.ui.animation.TransitionPane;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane;
+import org.jackhuang.hmcl.ui.construct.Navigator;
 import org.jackhuang.hmcl.ui.construct.TabHeader;
 import org.jackhuang.hmcl.ui.construct.Validator;
 import org.jackhuang.hmcl.ui.decorator.DecoratorAnimatedPage;
@@ -118,6 +119,15 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
         tab = new TabHeader(transitionPane, newGameTab, modpackTab, modTab, resourcePackTab, shaderTab, worldTab);
 
         GameDirectoryManager.registerVersionsListener(this::loadVersions);
+
+        // FSL: every time the download page is shown (from the tabs, or back from a detail page),
+        // quietly re-check the visible list for resources it is missing
+        addEventHandler(Navigator.NavigationEvent.NAVIGATED, e -> {
+            TabHeader.Tab<?> selected = tab.getSelectionModel().getSelectedItem();
+            if (selected != null && selected.getNode() instanceof DownloadListPage list) {
+                list.onPageShown();
+            }
+        });
 
         tab.select(newGameTab);
 

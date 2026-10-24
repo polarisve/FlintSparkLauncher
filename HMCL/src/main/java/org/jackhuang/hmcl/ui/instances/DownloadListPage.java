@@ -63,6 +63,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.jackhuang.hmcl.ui.FXUtils.ignoreEvent;
@@ -70,7 +71,7 @@ import static org.jackhuang.hmcl.ui.FXUtils.stringConverter;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 import static org.jackhuang.hmcl.util.javafx.ExtendedProperties.selectedItemPropertyFor;
 
-public class DownloadListPage extends Control implements DecoratorPage {
+public class DownloadListPage extends Control implements DecoratorPage, PageAware {
     protected final ReadOnlyObjectWrapper<State> state = new ReadOnlyObjectWrapper<>();
     private final BooleanProperty loading = new SimpleBooleanProperty(false);
     private final BooleanProperty failed = new SimpleBooleanProperty(false);
@@ -105,6 +106,9 @@ public class DownloadListPage extends Control implements DecoratorPage {
     private final DownloadProvider downloadProvider;
 
     private Runnable retrySearch;
+
+    /// FSL: re-runs the last search in the background and quietly adds anything new to the list.
+    private @Nullable Runnable quietRefresh;
 
     public DownloadListPage(@NotNull RemoteAddon.Type type, RemoteAddonRepository repository) {
         this(type, repository, null, false);
@@ -206,17 +210,10 @@ public class DownloadListPage extends Control implements DecoratorPage {
         setFailed(false);
 
         int currentSearchID = searchID = searchID + 1;
-        Task.supplyAsync(() -> {
-            HMCLGameInstance.Optional instanceReference = this.instanceReference.get();
-            @Nullable HMCLGameInstance instance = instanceReference.instance();
-            if (instance == null) {
-                return userGameVersion;
-            } else {
-                GameVersionNumber version = instance.getVersion();
-                return version != GameVersionNumber.unknown() ? version.toString() : "";
-            }
-        }).thenApplyAsync(
-                gameVersion -> repository.search(downloadProvider, type, gameVersion, category, pageOffset, 50, searchFilter, sort, RemoteAddonRepository.SortOrder.DESC)
+        quietRefresh = () -> refreshQuietly(userGameVersion, category, pageOffset, searchFilter, sort, currentSearchID);
+        Task.supplyAsync(() -> gameVersionFor(userGameVersion)).thenApplyAsync(
+                gameVersion -> FslMergedAddonRepository.withLateResults(lateAppender(currentSearchID),
+                        () -> repository.search(downloadProvider, type, gameVersion, category, pageOffset, 50, searchFilter, sort, RemoteAddonRepository.SortOrder.DESC))
         ).whenComplete(Schedulers.javafx(), (result, exception) -> {
             if (searchID != currentSearchID) {
                 return;
@@ -233,6 +230,60 @@ public class DownloadListPage extends Control implements DecoratorPage {
                 retrySearch = () -> search(userGameVersion, category, pageOffset, searchFilter, sort);
             }
         }).executor(true);
+    }
+
+    /// The game version to search for: the selected instance's version, or the one picked by the user.
+    private String gameVersionFor(String userGameVersion) {
+        @Nullable HMCLGameInstance instance = this.instanceReference.get().instance();
+        if (instance == null) {
+            return userGameVersion;
+        }
+        GameVersionNumber version = instance.getVersion();
+        return version != GameVersionNumber.unknown() ? version.toString() : "";
+    }
+
+    /// FSL: adds results that arrive late (slow CurseForge) to the list, if it still shows that search.
+    private Consumer<List<RemoteAddon>> lateAppender(int forSearchID) {
+        return more -> FXUtils.runInFX(() -> {
+            if (searchID == forSearchID) {
+                appendNew(more);
+            }
+        });
+    }
+
+    /// FSL: appends the results that are not in the list yet, without any message.
+    private void appendNew(List<RemoteAddon> found) {
+        Set<String> present = new HashSet<>();
+        for (RemoteAddon addon : items) {
+            present.add(FslMergedAddonRepository.dedupeKey(addon));
+        }
+        List<RemoteAddon> extra = found.stream()
+                .filter(addon -> present.add(FslMergedAddonRepository.dedupeKey(addon)))
+                .toList();
+        if (!extra.isEmpty()) {
+            items.addAll(extra);
+        }
+    }
+
+    /// FSL: searches again with the same filters and quietly adds what the list is missing.
+    private void refreshQuietly(String userGameVersion, RemoteAddonRepository.Category category, int pageOffset,
+                                String searchFilter, RemoteAddonRepository.SortType sort, int forSearchID) {
+        Task.supplyAsync(() -> FslMergedAddonRepository.withLateResults(lateAppender(forSearchID),
+                        () -> repository.search(downloadProvider, type, gameVersionFor(userGameVersion), category, pageOffset, 50,
+                                searchFilter, sort, RemoteAddonRepository.SortOrder.DESC).results().toList()))
+                .whenComplete(Schedulers.javafx(), (result, exception) -> {
+                    if (exception == null && result != null && searchID == forSearchID) {
+                        appendNew(result);
+                    }
+                }).start();
+    }
+
+    /// FSL: every time this list is shown again, check the sources for anything missing.
+    @Override
+    public void onPageShown() {
+        if (!isLoading() && !isFailed() && quietRefresh != null) {
+            quietRefresh.run();
+        }
     }
 
     protected String getLocalizedCategory(String category, Object self) {
