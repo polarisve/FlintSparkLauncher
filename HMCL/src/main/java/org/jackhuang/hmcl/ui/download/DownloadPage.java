@@ -22,7 +22,6 @@ import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
-import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
 import org.jackhuang.hmcl.addon.RemoteAddon;
@@ -132,15 +131,11 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
                 .add(shaderTab, i18n("download.shader"), SVG.WB_SUNNY)
                 .add(worldTab, i18n("world"), SVG.PUBLIC);
 
-        Label title = new Label(i18n("download"));
-        title.getStyleClass().add("fsl-page-title");
-        Label subtitle = new Label(i18n("fsl.download.subtitle"));
-        subtitle.getStyleClass().add("fsl-page-subtitle");
-        VBox titleBox = new VBox(2, title, subtitle);
-
-        VBox headerBox = new VBox(14, titleBox, pillTabs);
+        // FSL: no "下载 / 一站搞定" heading (the title bar already says 下载); tabs sit at the top
+        // so the result list gets more room
+        VBox headerBox = new VBox(pillTabs);
         headerBox.getStyleClass().add("fsl-page-header");
-        headerBox.setPadding(new Insets(18, 22, 10, 22));
+        headerBox.setPadding(new Insets(8, 12, 0, 12));
 
         BorderPane body = new BorderPane();
         body.setTop(headerBox);

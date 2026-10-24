@@ -315,7 +315,7 @@ public final class VersionsPage extends Control implements WizardPage, Refreshab
             GridPane searchPane = new GridPane();
             root.setTop(searchPane);
             searchPane.getStyleClass().addAll("card");
-            BorderPane.setMargin(searchPane, new Insets(10, 10, 0, 10));
+            BorderPane.setMargin(searchPane, new Insets(6, 10, 0, 10)); // FSL: closer to the tabs
 
             ColumnConstraints nameColumn = new ColumnConstraints();
             nameColumn.setMinWidth(USE_PREF_SIZE);
