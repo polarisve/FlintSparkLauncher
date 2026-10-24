@@ -132,9 +132,9 @@ public final class FslHome {
                 Instances.modifyGameSettings(game);
             }
         });
-        Button manage = Fsl.button(i18n("fsl.home.action.instances"), SVG.DEPLOYED_CODE, Fsl.ButtonKind.GHOST);
+        Button manage = Fsl.button(i18n("fsl.home.action.instances"), SVG.DEPLOYED_CODE, Fsl.ButtonKind.SECONDARY);
         manage.setOnAction(e -> Controllers.navigate(Controllers.getGameListPage()));
-        HBox actions = new HBox(8, settings, manage);
+        HBox actions = new HBox(16, settings, manage);
 
         VBox instanceCard = Fsl.card();
         instanceCard.getStyleClass().add("fsl-card-hero");

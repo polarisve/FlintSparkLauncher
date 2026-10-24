@@ -890,6 +890,19 @@
     -fx-background-color: rgba(167, 139, 250, 0.10);
 }
 
+/* Delete / dangerous dialog buttons get a red frame like "Cancel" gets a purple one */
+.dialog-error {
+    -fx-text-fill: -fsl2-danger;
+    -fx-border-color: rgba(251, 113, 133, 0.75);
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-padding: 7 16 7 16;
+}
+
+.dialog-error:hover {
+    -fx-background-color: rgba(251, 113, 133, 0.12);
+}
+
 /* Login method tabs in the add-account dialog */
 .add-account-tab-header .tab-header-background {
     -fx-background-color: -fsl2-rail;
