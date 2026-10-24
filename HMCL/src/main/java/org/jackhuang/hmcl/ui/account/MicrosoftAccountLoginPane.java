@@ -281,13 +281,6 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
                     ? "https://www.microsoft.com/link?otc=" + wait.userCode()
                     : wait.verificationUri();
 
-            var deviceHint = new HintPane(MessageDialogPane.MessageType.INFO);
-            deviceHint.setSegment(i18n("account.methods.microsoft.methods.device.hint",
-                    StringUtils.escapeXmlAttribute(scanUri),
-                    wait.verificationUri(),
-                    wait.userCode()
-            ));
-
             var qrCode = new SVGPath();
             qrCode.fillProperty().bind(Themes.colorSchemeProperty().getPrimary());
             qrCode.setContent(QrCodeUtils.toSVGPath(QrCode.encodeText(scanUri, QrCode.Ecc.MEDIUM)));
@@ -305,9 +298,16 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
             codeBox.setMaxWidth(USE_PREF_SIZE);
 
             leftVBox.getChildren().setAll(new Group(qrCode), codeBox);
-            rightVBox.getChildren().setAll(warningPane, deviceHint);
 
-            rootContainer.getChildren().setAll(hbox);
+            // FSL: no "visit the link and enter the code" hint next to the QR code
+            if (warningPane.getChildren().isEmpty()) {
+                leftVBox.prefWidthProperty().unbind();
+                leftVBox.setPrefWidth(USE_COMPUTED_SIZE);
+                rootContainer.getChildren().setAll(leftVBox);
+            } else {
+                rightVBox.getChildren().setAll(warningPane);
+                rootContainer.getChildren().setAll(hbox);
+            }
         } else if (currentStep instanceof Step.DeviceLoginCompleted) {
             loginButtonSpinner.setLoading(true);
 
