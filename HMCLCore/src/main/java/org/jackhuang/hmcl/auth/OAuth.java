@@ -114,9 +114,15 @@ public class OAuth {
         }
     }
 
+    // FSL: personal accounts got "We couldn't complete your request" when the device code came from
+    // login.microsoftonline.com; the login.live.com device code (same endpoint family as the window login) works
+    private static final String LIVE_DEVICE_CODE_URL = "https://login.live.com/oauth20_connect.srf";
+
     private Result authenticateDevice(Options options) throws IOException, InterruptedException, JsonParseException, AuthenticationException {
-        DeviceTokenResponse deviceTokenResponse = HttpRequest.POST(deviceCodeURL)
-                .form(pair("client_id", options.callback.getClientId()), pair("scope", options.scope))
+        DeviceTokenResponse deviceTokenResponse = HttpRequest.POST(LIVE_DEVICE_CODE_URL)
+                .form(pair("client_id", options.callback.getClientId()),
+                        pair("scope", options.scope),
+                        pair("response_type", "device_code"))
                 .ignoreHttpCode()
                 .retry(5)
                 .getJson(DeviceTokenResponse.class);
@@ -139,10 +145,10 @@ public class OAuth {
                 throw new NoSelectedCharacterException();
             }
 
-            TokenResponse tokenResponse = HttpRequest.POST(tokenURL)
+            TokenResponse tokenResponse = HttpRequest.POST(accessTokenURL)
                     .form(
                             pair("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-                            pair("code", deviceTokenResponse.deviceCode),
+                            pair("device_code", deviceTokenResponse.deviceCode),
                             pair("client_id", options.callback.getClientId()))
                     .ignoreHttpCode()
                     .retry(5)
