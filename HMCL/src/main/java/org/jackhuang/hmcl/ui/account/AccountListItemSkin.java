@@ -19,7 +19,6 @@ package org.jackhuang.hmcl.ui.account;
 
 import com.jfoenix.controls.JFXButton;
 import com.jfoenix.controls.JFXRadioButton;
-import com.jfoenix.effects.JFXDepthManager;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -30,6 +29,7 @@ import javafx.scene.control.SkinBase;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import org.jackhuang.hmcl.auth.Account;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorAccount;
@@ -54,19 +54,23 @@ public final class AccountListItemSkin extends SkinBase<AccountListItem> {
 
         BorderPane root = new BorderPane();
         root.setCursor(Cursor.HAND);
+        // FSL: rounded card; the selected account gets a purple outline instead of a radio dot
+        skinnable.getStyleClass().add("fsl-account-row");
+        root.getStyleClass().add("fsl-account-item");
         FXUtils.onClicked(root, skinnable::fire);
 
         JFXRadioButton chkSelected = new JFXRadioButton();
         chkSelected.setMouseTransparent(true);
         BorderPane.setAlignment(chkSelected, Pos.CENTER);
         chkSelected.selectedProperty().bind(skinnable.selectedProperty());
-        root.setLeft(chkSelected);
+        chkSelected.setVisible(false);
+        chkSelected.setManaged(false);
 
         HBox center = new HBox();
         center.setSpacing(8);
         center.setAlignment(Pos.CENTER_LEFT);
 
-        Canvas canvas = new Canvas(32, 32);
+        Canvas canvas = new Canvas(36, 36);
         TexturesLoader.bindAvatar(canvas, skinnable.getAccount());
 
         Label title = new Label();
@@ -85,12 +89,21 @@ public final class AccountListItemSkin extends SkinBase<AccountListItem> {
         item.getStyleClass().add("two-line-list-item");
         BorderPane.setAlignment(item, Pos.CENTER);
 
-        center.getChildren().setAll(canvas, item);
-        root.setCenter(center);
-        BorderPane.setMargin(center, new Insets(0, 0, 0, 8));
+        StackPane avatar = new StackPane(canvas);
+        avatar.getStyleClass().add("fsl-account-avatar");
 
-        HBox right = new HBox();
+        Label current = new Label(i18n("account.current"));
+        current.getStyleClass().add("fsl-chip");
+        current.visibleProperty().bind(skinnable.selectedProperty());
+        current.managedProperty().bind(skinnable.selectedProperty());
+
+        center.getChildren().setAll(avatar, item, current);
+        root.setCenter(center);
+        BorderPane.setMargin(center, new Insets(0, 0, 0, 4));
+
+        HBox right = new HBox(6);
         right.setAlignment(Pos.CENTER_RIGHT);
+        right.getStyleClass().add("fsl-account-actions");
 
         JFXButton btnMove = new JFXButton();
         SpinnerPane spinnerMove = new SpinnerPane();
@@ -165,15 +178,13 @@ public final class AccountListItemSkin extends SkinBase<AccountListItem> {
         right.getChildren().add(btnCopyUUID);
 
         JFXButton btnRemove = FXUtils.newToggleButton4(SVG.DELETE_FOREVER);
+        btnRemove.getStyleClass().add("fsl-icon-danger");
         btnRemove.setOnAction(e -> Controllers.confirm(i18n("button.remove.confirm"), i18n("button.remove"), skinnable::remove, null));
         BorderPane.setAlignment(btnRemove, Pos.CENTER);
         FXUtils.installFastTooltip(btnRemove, i18n("button.delete"));
         right.getChildren().add(btnRemove);
         root.setRight(right);
 
-        root.getStyleClass().add("card");
-        root.setStyle("-fx-padding: 8 8 8 0;");
-        JFXDepthManager.setDepth(root, 1);
 
         getChildren().setAll(root);
     }

@@ -679,3 +679,204 @@
 .jfx-layout-actions > HBox {
     -fx-spacing: 16;
 }
+
+/* ---------- Account list (FSL layout) ----------
+ * Rounded rows with a larger avatar; the account in use gets a purple outline and a "使用中" chip
+ * instead of the upstream radio dot. */
+.card-list {
+    -fx-padding: 14 16 14 16;
+    -fx-spacing: 10;
+}
+
+.fsl-account-item {
+    -fx-background-color: -fsl2-card;
+    -fx-background-radius: 14;
+    -fx-border-color: -fsl2-card-line;
+    -fx-border-radius: 14;
+    -fx-border-width: 1;
+    -fx-padding: 10 12 10 12;
+}
+
+.fsl-account-item:hover {
+    -fx-background-color: -fsl2-card-hover;
+    -fx-border-color: -fsl2-border;
+}
+
+.fsl-account-row:selected .fsl-account-item {
+    -fx-background-color: linear-gradient(to right, rgba(167, 139, 250, 0.20), -fsl2-card 70%);
+    -fx-border-color: -fsl2-primary;
+}
+
+.fsl-account-avatar {
+    -fx-background-color: -fsl2-rail;
+    -fx-background-radius: 10;
+    -fx-padding: 4;
+}
+
+.fsl-account-item .two-line-list-item .title {
+    -fx-text-fill: -fsl2-text;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.fsl-account-item .two-line-list-item .subtitle {
+    -fx-text-fill: -fsl2-muted;
+    -fx-font-size: 12px;
+}
+
+/* Small rounded-square icon buttons (account row actions, list tools) */
+.toggle-icon4 {
+    -fx-background-radius: 9;
+}
+
+.toggle-icon4 .jfx-rippler {
+    -jfx-mask-type: RECT;
+}
+
+.toggle-icon4 .svg {
+    -fx-fill: -fsl2-muted;
+}
+
+.toggle-icon4:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.14);
+}
+
+.toggle-icon4:hover .svg {
+    -fx-fill: -fsl2-text;
+}
+
+.fsl-account-actions .toggle-icon4 {
+    -fx-background-color: -fsl2-rail;
+}
+
+.fsl-account-actions .toggle-icon4:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.18);
+}
+
+.toggle-icon4.fsl-icon-danger:hover {
+    -fx-background-color: rgba(251, 113, 133, 0.16);
+}
+
+.toggle-icon4.fsl-icon-danger:hover .svg {
+    -fx-fill: -fsl2-danger;
+}
+
+/* ---------- Settings / option lists (FSL layout) ----------
+ * Each group is one rounded card; rows are separated by a thin line, no harsh shadow. */
+.options-list {
+    -fx-effect: null;
+    -fx-background-color: -fsl2-card;
+    -fx-background-radius: 14;
+    -fx-border-color: -fsl2-card-line;
+    -fx-border-radius: 14;
+    -fx-border-width: 1;
+    -fx-padding: 0;
+}
+
+.options-list-item {
+    -fx-background-color: transparent;
+    -fx-border-color: -fsl2-card-line;
+    -fx-border-width: 1 0 0 0;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+    -fx-padding: 11 16 11 16;
+    -fx-font-size: 13;
+}
+
+.options-list-item:first {
+    -fx-background-radius: 14 14 0 0;
+    -fx-border-width: 0;
+}
+
+.options-list-item:last {
+    -fx-background-radius: 0 0 14 14;
+}
+
+.options-list-item:first:last {
+    -fx-background-radius: 14;
+    -fx-border-width: 0;
+}
+
+.options-list-item:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.06);
+}
+
+.options-sublist, .options-sublist .options-list-item, .options-sublist-wrapper > .container {
+    -fx-background-color: rgba(20, 17, 29, 0.45);
+}
+
+.options-sublist .options-list-item:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.06);
+}
+
+.options-list-item .label {
+    -fx-text-fill: -fsl2-text;
+}
+
+.options-list-item .label.subtitle, .options-list-item .subtitle-label {
+    -fx-text-fill: -fsl2-muted;
+}
+
+.options-sublist-wrapper .expand-icon .svg {
+    -fx-fill: -fsl2-primary;
+}
+
+.line-component .line-component-container {
+    -fx-padding: 11 16 11 16;
+}
+
+/* Section headings above each card group ("基本设置", "高级设置"...) */
+.options-list-title {
+    -fx-text-fill: -fsl2-primary;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+/* Combo boxes / inputs inside settings: soft rounded field */
+.options-list-item .jfx-combo-box, .options-list-item .jfx-text-field {
+    -fx-background-color: -fsl2-rail;
+    -fx-background-radius: 8;
+    -fx-padding: 2 8 2 8;
+}
+
+/* Hints: rounded, tinted instead of hard-bordered boxes */
+.hint {
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-padding: 10 12 10 12;
+}
+
+/* Generic cards (instance list, download results...) also get softer corners */
+.card, .card-non-transparent, .card-no-padding, .md-list-cell, .installer-item-wrapper, .game-directory-list-item {
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-effect: null;
+}
+
+/* Side navigation items a bit rounder */
+.fsl-page-side .advanced-list-item > .rippler-container > .container {
+    -fx-background-radius: 10;
+}
+
+/* Dialogs: rounder, with an outline */
+.jfx-dialog-layout {
+    -fx-background-radius: 16;
+    -fx-border-color: -fsl2-card-line;
+    -fx-border-radius: 16;
+}
+
+.dialog-accept, .dialog-cancel, .jfx-button-raised {
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-padding: 7 16 7 16;
+}
+
+.dialog-cancel:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.10);
+}
+
+/* Login method tabs in the add-account dialog */
+.add-account-tab-header .tab-header-background {
+    -fx-background-color: -fsl2-rail;
+    -fx-background-radius: 10;
+}
