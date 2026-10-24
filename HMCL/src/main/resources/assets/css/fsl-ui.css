@@ -745,7 +745,7 @@
 }
 
 .fsl-account-actions .toggle-icon4 {
-    -fx-background-color: -fsl2-rail;
+    -fx-background-color: transparent;
 }
 
 .fsl-account-actions .toggle-icon4:hover {
