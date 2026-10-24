@@ -86,6 +86,17 @@ public final class VersionsPage extends Control implements WizardPage, Refreshab
     private final ObservableList<ComponentRemoteVersion> versions = FXCollections.observableArrayList();
     private final ObjectProperty<Status> status = new SimpleObjectProperty<>(Status.LOADING);
 
+    /// FSL: keyword pushed from the global search box; the skin puts it into the name filter.
+    private final javafx.beans.property.StringProperty externalKeyword = new javafx.beans.property.SimpleStringProperty(this, "externalKeyword");
+
+    /// FSL: filters the version list by `keyword`, as if it had been typed into the name field.
+    ///
+    /// @param keyword the search text
+    public void searchFor(String keyword) {
+        externalKeyword.set(null);
+        externalKeyword.set(keyword);
+    }
+
     public VersionsPage(Navigation navigation,
                         String title, GameVersionNumber gameVersion,
                         DownloadProvider downloadProvider,
@@ -456,6 +467,13 @@ public final class VersionsPage extends Control implements WizardPage, Refreshab
             }
 
             this.getChildren().setAll(root);
+
+            // FSL: keyword from the global search; applied once the list exists
+            FXUtils.onChangeAndOperate(control.externalKeyword, keyword -> {
+                if (keyword != null) {
+                    nameField.setText(keyword);
+                }
+            });
         }
 
         private void updateList() {

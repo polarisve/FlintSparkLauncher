@@ -17,6 +17,8 @@
  */
 package org.jackhuang.hmcl.ui.fsl.ds;
 
+import com.jfoenix.controls.JFXButton;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
@@ -24,13 +26,15 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import org.jackhuang.hmcl.ui.SVG;
 import org.jetbrains.annotations.NotNullByDefault;
 
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 /// FSL top bar: page title on the left, global search and trailing actions on the right.
 ///
-/// Pressing Enter in the search box hands the query to the search handler; Esc clears it.
+/// Pressing Enter or the magnifier button hands the query to the search handler; Esc clears it.
 @NotNullByDefault
 public final class FslTopBar extends HBox {
 
@@ -46,8 +50,9 @@ public final class FslTopBar extends HBox {
     /// Creates a top bar.
     ///
     /// @param searchPrompt placeholder text for the search box
-    /// @param onSearch     called with the trimmed query when Enter is pressed
-    public FslTopBar(String searchPrompt, Consumer<String> onSearch) {
+    /// @param onSearch     called with the trimmed query and the search box (to place a popup under)
+    ///                     when Enter or the magnifier is pressed
+    public FslTopBar(String searchPrompt, BiConsumer<String, Node> onSearch) {
         getStyleClass().add("fsl-topbar");
 
         title.getStyleClass().add("fsl-page-title");
@@ -57,12 +62,30 @@ public final class FslTopBar extends HBox {
         search.setAccessibleText(searchPrompt);
         // Clicking still focuses it; this only stops it grabbing focus when the window opens
         search.setFocusTraversable(false);
+
+        // Magnifier inside the right end of the box; clicking it searches like Enter
+        JFXButton magnifier = new JFXButton();
+        magnifier.getStyleClass().add("fsl-search-button");
+        magnifier.setGraphic(SVG.SEARCH.createIcon(14));
+        magnifier.setFocusTraversable(false);
+        magnifier.setAccessibleText(searchPrompt);
+        StackPane box = new StackPane(search, magnifier);
+        box.getStyleClass().add("fsl-search-box");
+        StackPane.setAlignment(magnifier, Pos.CENTER_RIGHT);
+
+        Runnable submit = () -> {
+            String query = search.getText().trim();
+            if (!query.isEmpty()) {
+                onSearch.accept(query, box);
+            } else {
+                search.requestFocus();
+            }
+        };
+        magnifier.setOnAction(e -> submit.run());
+
         search.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ENTER) {
-                String query = search.getText().trim();
-                if (!query.isEmpty()) {
-                    onSearch.accept(query);
-                }
+                submit.run();
                 e.consume();
             } else if (e.getCode() == KeyCode.ESCAPE) {
                 search.clear();
@@ -70,11 +93,11 @@ public final class FslTopBar extends HBox {
             }
         });
 
-        trailing.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+        trailing.setAlignment(Pos.CENTER_RIGHT);
 
         Region grow = new Region();
         HBox.setHgrow(grow, Priority.ALWAYS);
-        getChildren().addAll(title, grow, search, trailing);
+        getChildren().addAll(title, grow, box, trailing);
     }
 
     /// Sets the page title.
