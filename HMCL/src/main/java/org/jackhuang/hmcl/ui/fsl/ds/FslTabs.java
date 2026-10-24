@@ -106,6 +106,13 @@ public final class FslTabs<K> extends StackPane {
             moveIndicator(true);
         });
         row.layoutBoundsProperty().addListener(o -> moveIndicator(false));
+        // Labels appear/disappear: jump the pill to the new tab size once layout has run
+        compact.addListener(o -> {
+            if (slide != null) {
+                slide.stop();
+            }
+            Platform.runLater(() -> jumpIndicator());
+        });
     }
 
     /// Adds a tab.
@@ -183,6 +190,25 @@ public final class FslTabs<K> extends StackPane {
     /// Returns the property holding the selected tab.
     public ObjectProperty<@Nullable K> selectedProperty() {
         return selected;
+    }
+
+    /// Places the pill behind the selected tab without animating.
+    private void jumpIndicator() {
+        @Nullable K key = selected.get();
+        @Nullable HBox item = key == null ? null : items.get(key);
+        if (item == null || item.getWidth() <= 0) {
+            moveIndicator(false);
+            return;
+        }
+        if (slide != null) {
+            slide.stop();
+        }
+        Bounds bounds = overlay.sceneToLocal(item.localToScene(item.getLayoutBounds()));
+        indicator.setLayoutX(bounds.getMinX());
+        indicator.setLayoutY(bounds.getMinY());
+        indicatorWidth.set(bounds.getWidth());
+        indicator.resize(bounds.getWidth(), bounds.getHeight());
+        indicator.setVisible(true);
     }
 
     /// Moves the pill behind the selected tab.
