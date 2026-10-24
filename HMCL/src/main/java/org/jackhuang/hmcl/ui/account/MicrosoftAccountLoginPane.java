@@ -213,8 +213,9 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
                 return;
             }
 
-            browserTaskExecutor = Task.supplyAsync(() -> Accounts.FACTORY_MICROSOFT.create(null, null, null, null, OAuth.GrantFlow.AUTHORIZATION_CODE))
-                    .whenComplete(Schedulers.javafx(), this::onLoginCompleted)
+            TaskExecutor[] self = new TaskExecutor[1];
+            self[0] = browserTaskExecutor = Task.supplyAsync(() -> Accounts.FACTORY_MICROSOFT.create(null, null, null, null, OAuth.GrantFlow.AUTHORIZATION_CODE))
+                    .whenComplete(Schedulers.javafx(), (account, exception) -> onLoginCompleted(self[0], account, exception))
                     .executor(true);
         } else if (currentStep instanceof Step.StartDeviceCodeLogin) {
             loginButtonSpinner.setLoading(true);
@@ -222,8 +223,9 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
 
             rootContainer.getChildren().add(new JFXSpinner());
 
-            deviceTaskExecutor = Task.supplyAsync(() -> Accounts.FACTORY_MICROSOFT.create(null, null, null, null, OAuth.GrantFlow.DEVICE))
-                    .whenComplete(Schedulers.javafx(), this::onLoginCompleted)
+            TaskExecutor[] self = new TaskExecutor[1];
+            self[0] = deviceTaskExecutor = Task.supplyAsync(() -> Accounts.FACTORY_MICROSOFT.create(null, null, null, null, OAuth.GrantFlow.DEVICE))
+                    .whenComplete(Schedulers.javafx(), (account, exception) -> onLoginCompleted(self[0], account, exception))
                     .executor(true);
         } else if (currentStep instanceof Step.WaitForOpenBrowser wait) {
             @Nullable NativeClientOAuthSession nativeSession = Accounts.OAUTH_CALLBACK.getNativeSession();
@@ -386,7 +388,10 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
         fireEvent(new DialogCloseEvent());
     }
 
-    private void onLoginCompleted(MicrosoftAccount account, Exception exception) {
+    private void onLoginCompleted(@Nullable TaskExecutor executor, MicrosoftAccount account, Exception exception) {
+        // FSL: a login that was cancelled (e.g. the user switched to QR code login) fails with
+        // "OAuth session is closing"; showing that error would also cancel the login the user switched to
+        if (executor != null && executor.isCancelled()) return;
         if (FslWebComponent.isLoaded()) FslMicrosoftLoginWindow.close();
         if (exception == null) {
             boolean storageReadOnly = accountToRelogin != null
