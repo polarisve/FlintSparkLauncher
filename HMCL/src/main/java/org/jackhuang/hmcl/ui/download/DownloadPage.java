@@ -245,6 +245,40 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
         return shaderTab.getNode();
     }
 
+    /// FSL: the tab for an online resource type.
+    private TabHeader.Tab<DownloadListPage> addonTab(RemoteAddon.Type type) {
+        return switch (type) {
+            case MODPACK -> modpackTab;
+            case MOD -> modTab;
+            case RESOURCE_PACK -> resourcePackTab;
+            case SHADER_PACK -> shaderTab;
+            case WORLD -> worldTab;
+            default -> throw new IllegalArgumentException("No download tab for " + type);
+        };
+    }
+
+    /// FSL: returns the list page for `type`, creating it if needed, without switching tabs.
+    public DownloadListPage addonListPage(RemoteAddon.Type type) {
+        TabHeader.Tab<DownloadListPage> addonTab = addonTab(type);
+        addonTab.initializeIfNeeded();
+        return addonTab.getNode();
+    }
+
+    /// FSL: switches to the tab for `type` and returns its list page.
+    public DownloadListPage showAddonDownloads(RemoteAddon.Type type) {
+        TabHeader.Tab<DownloadListPage> addonTab = addonTab(type);
+        tab.select(addonTab, false);
+        return addonTab.getNode();
+    }
+
+    /// FSL: starts installing a vanilla game version, as if it had been picked in the game tab.
+    public void installGame(GameRemoteVersion version) {
+        HMCLGameRepository repository = GameDirectoryManager.getSelectedRepository();
+        if (repository.isLoaded()) {
+            Controllers.getDecorator().startWizard(new VanillaInstallWizardProvider(repository, version), i18n("install.new_game"));
+        }
+    }
+
     public DownloadListPage showModDownloads() {
         tab.select(modTab, false);
         return modTab.getNode();

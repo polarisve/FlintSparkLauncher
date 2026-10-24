@@ -1123,17 +1123,22 @@
     -fx-fill: -fsl2-primary;
 }
 
-/* Result menu under the search box */
-.fsl-search-menu .iconed-menu-item .label {
-    -fx-text-fill: -fsl2-text;
-}
-
-.fsl-search-menu .iconed-menu-item .svg {
+/* ---------- Aggregated search page ----------
+ * Each section is a purple-framed card; only the result row under the pointer lights up. */
+.fsl-search-section-icon .svg, .fsl-search-section-icon {
     -fx-fill: -fsl2-primary;
 }
 
-.fsl-search-menu-title {
-    -fx-text-fill: -fsl2-muted;
-    -fx-font-size: 11px;
-    -fx-padding: 6 16 2 16;
+.fsl-search-row {
+    -fx-padding: 6 8 6 8;
+    -fx-background-radius: 10;
+    -fx-background-color: transparent;
+}
+
+.fsl-search-row:hover, .fsl-search-row:focused {
+    -fx-background-color: rgba(167, 139, 250, 0.16);
+}
+
+.fsl-search-row .two-line-list-item > .first-line > .title {
+    -fx-font-size: 13px;
 }

@@ -31,7 +31,7 @@ import org.jackhuang.hmcl.ui.SVG;
 import org.jackhuang.hmcl.ui.decorator.Decorator;
 import org.jetbrains.annotations.NotNullByDefault;
 
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /// FSL top bar: page title on the left, global search and trailing actions on the right.
 ///
@@ -52,9 +52,8 @@ public final class FslTopBar extends HBox {
     /// Creates a top bar.
     ///
     /// @param searchPrompt placeholder text for the search box
-    /// @param onSearch     called with the trimmed query and the search box (to place a popup under)
-    ///                     when the magnifier is pressed
-    public FslTopBar(String searchPrompt, BiConsumer<String, Node> onSearch) {
+    /// @param onSearch     called with the trimmed query when the magnifier is pressed
+    public FslTopBar(String searchPrompt, Consumer<String> onSearch) {
         getStyleClass().add("fsl-topbar");
 
         title.getStyleClass().add("fsl-page-title");
@@ -78,7 +77,7 @@ public final class FslTopBar extends HBox {
         Runnable submit = () -> {
             String query = search.getText().trim();
             if (!query.isEmpty()) {
-                onSearch.accept(query, box);
+                onSearch.accept(query);
             } else {
                 search.requestFocus();
             }

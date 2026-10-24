@@ -122,6 +122,27 @@ public class DownloadListPage extends Control implements DecoratorPage {
         return downloadProvider;
     }
 
+    /// FSL: returns the kind of resource this page lists.
+    public RemoteAddon.Type getAddonType() {
+        return type;
+    }
+
+    /// FSL: runs a one-off search for the aggregated search page, without touching this page's list.
+    ///
+    /// @param keyword  the search text
+    /// @param pageSize how many results to ask for
+    /// @return the results, in the same order this page would show them
+    public List<RemoteAddon> searchOnce(String keyword, int pageSize) throws java.io.IOException {
+        return repository.search(downloadProvider, type, "", null, 0, pageSize, keyword,
+                        RemoteAddonRepository.SortType.RELEVANCY, RemoteAddonRepository.SortOrder.DESC)
+                .results().collect(Collectors.toList());
+    }
+
+    /// FSL: opens the detail page of a result found by [#searchOnce(String, int)].
+    public void openAddon(RemoteAddon addon) {
+        Controllers.navigate(new DownloadPage(this, addon, getInstanceOptional(), callback));
+    }
+
     public ObservableList<Node> getActions() {
         return actions;
     }
