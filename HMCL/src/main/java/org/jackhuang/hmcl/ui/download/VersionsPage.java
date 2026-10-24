@@ -53,6 +53,7 @@ import org.jackhuang.hmcl.ui.SVG;
 import org.jackhuang.hmcl.ui.animation.ContainerAnimations;
 import org.jackhuang.hmcl.ui.animation.TransitionPane;
 import org.jackhuang.hmcl.ui.construct.ComponentList;
+import org.jackhuang.hmcl.ui.construct.PageAware;
 import org.jackhuang.hmcl.ui.construct.RipplerContainer;
 import org.jackhuang.hmcl.ui.construct.SpinnerPane;
 import org.jackhuang.hmcl.ui.construct.TwoLineListItem;
@@ -75,7 +76,7 @@ import static org.jackhuang.hmcl.ui.FXUtils.*;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
-public final class VersionsPage extends Control implements WizardPage, Refreshable {
+public final class VersionsPage extends Control implements WizardPage, Refreshable, PageAware {
     private final @Nullable GameVersionNumber gameVersion;
     private final GameComponentType componentType;
     private final String title;
@@ -120,6 +121,15 @@ public final class VersionsPage extends Control implements WizardPage, Refreshab
     @Override
     public void refresh() {
         load(true);
+    }
+
+    /// FSL: the game version list is fetched again (with the spinner) every time it is opened, so new
+    /// releases and snapshots show up without restarting. Loader lists in the install wizard are left alone.
+    @Override
+    public void onPageShown() {
+        if (componentType == GameComponentType.GAME && status.get() != Status.LOADING) {
+            load(true);
+        }
     }
 
     private void load(boolean refresh) {
