@@ -916,3 +916,36 @@
 .options-list-item:hover, .options-sublist .options-list-item:hover {
     -fx-background-color: rgba(167, 139, 250, 0.14);
 }
+
+/* ---------- Always-on purple frame (FSL) ----------
+ * Home cards and account rows always show a purple outline on a light purple background;
+ * pointing at them makes both brighter. */
+.fsl-card,
+.fsl-account-card,
+.fsl-instance-line,
+.fsl-account-item {
+    -fx-background-color: #2E2645;
+    -fx-border-color: rgba(167, 139, 250, 0.55);
+    -fx-border-width: 1;
+    -fx-effect: null;
+}
+
+.fsl-card-clickable:hover,
+.fsl-account-card:hover,
+.fsl-instance-line:hover,
+.fsl-account-item:hover {
+    -fx-background-color: #3E3460;
+    -fx-border-color: #C4B1FF;
+    -fx-effect: dropshadow(gaussian, rgba(167, 139, 250, 0.30), 12, 0.1, 0, 0);
+}
+
+/* Account in use: a bit stronger than the others */
+.fsl-account-row:selected .fsl-account-item {
+    -fx-background-color: #382E58;
+    -fx-border-color: -fsl2-primary;
+}
+
+.fsl-account-row:selected .fsl-account-item:hover {
+    -fx-background-color: #44396A;
+    -fx-border-color: #C4B1FF;
+}
