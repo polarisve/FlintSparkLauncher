@@ -86,7 +86,7 @@ final class MainWindowPane extends StackPane {
     private final TransitionPane navBarPane;
 
     /// FSL: tabs in the middle of the title bar, used to size the page title.
-    private @Nullable FslNavigationTabs titleTabs;
+    private @Nullable Node titleTabs;
 
     /// FSL: search box and window buttons, used to size the page title.
     private @Nullable Node titleRight;
@@ -133,8 +133,8 @@ final class MainWindowPane extends StackPane {
         windowButtons = createWindowButtons();
         titleBar = new BorderPane() {
             /// FSL: the page title gets every pixel left of the tabs. It used to be capped at 180px,
-            /// which cut "安装新游戏 - 26.3" off. The width is the same on every page, so the tabs never
-            /// move when switching pages. Only fixed sizes are used here, so this settles in one pass.
+            /// which cut "安装新游戏 - 26.3" off. The tabs keep the same size on every page and this
+            /// width only depends on the window width, so the tabs never move when switching pages.
             @Override
             protected void layoutChildren() {
                 if (titleTabs != null && titleRight != null) {
@@ -312,24 +312,13 @@ final class MainWindowPane extends StackPane {
             return;
         }
 
-        // FSL: sub-pages (install wizard, instance settings...) have long titles such as
-        // "安装新游戏 - 26.3". There the tabs show icons only (names on hover) so the title fits.
-        // Decided once per page, not while laying out, so nothing jumps around.
-        if (titleTabs != null) {
-            String title = state.title();
-            titleTabs.setCompact(decorator.canCloseProperty().get() || title != null && title.length() > 6);
-        }
-
         Node navBar = createNavBar(state);
 
         if (state.animate()) {
-            TransitionPane.AnimationProducer animation = switch (decorator.getNavigationDirection()) {
-                case NEXT -> NavBarAnimations.NEXT;
-                case PREVIOUS -> NavBarAnimations.PREVIOUS;
-                default -> ContainerAnimations.FADE;
-            };
+            // FSL: plain fade. The upstream sideways slide drew the old and new titles on top of
+            // each other for a moment, which looked like the title bar jumping out of place.
             decorator.setNavigationDirection(Navigation.NavigationDirection.START);
-            navBarPane.setContent(navBar, animation, Motion.SHORT4);
+            navBarPane.setContent(navBar, ContainerAnimations.FADE, Motion.SHORT4);
         } else {
             navBarPane.getChildren().setAll(navBar);
         }
