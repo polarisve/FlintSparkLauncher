@@ -115,6 +115,8 @@ final class MainWindowPane extends StackPane {
 
         frame = new BorderPane();
         frame.getStyleClass().add("jfx-decorator");
+        frame.setMinWidth(0);
+        setMinWidth(0);
 
         StackPane center = new StackPane();
         center.getStyleClass().add("jfx-decorator-content-container");
@@ -126,6 +128,10 @@ final class MainWindowPane extends StackPane {
         titleBar = new BorderPane();
         titleBar.setPickOnBounds(false);
         titleBar.getStyleClass().add("jfx-tool-bar");
+        // FSL: BorderPane asks for the sum of its parts' preferred widths as its minimum. With a long
+        // page title that exceeded the window, so the whole window content was laid out wider than
+        // the window, centered, and cut off on both sides. Let everything shrink to the window.
+        titleBar.setMinWidth(0);
         // FSL: global search left of the window buttons; Enter searches mods on the download page
         FslTopBar search = new FslTopBar(i18n("fsl.search.prompt"), keyword -> {
             decorator.getNavigator().clear();
@@ -141,7 +147,7 @@ final class MainWindowPane extends StackPane {
 
         navBarPane = new TransitionPane();
         // FSL: keep the page title narrow so it never pushes the tabs in the middle
-        navBarPane.setMaxWidth(220);
+        navBarPane.setMaxWidth(180);
         navBarPane.setMinWidth(0);
         FXUtils.setOverflowHidden(navBarPane);
         titleBar.setLeft(navBarPane);
