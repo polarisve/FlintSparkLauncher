@@ -60,21 +60,24 @@ public final class FslMotion {
         return AnimationUtils.isAnimationEnabled();
     }
 
-    /// Adds a subtle scale-down on press and a lift on hover to a control.
+    /// Adds a subtle scale-down on press to a control.
+    ///
+    /// There is no zoom on hover: a button left at 102% draws its text stretched and blurry.
     ///
     /// @param node the node to animate
     public static void installPressFeedback(Node node) {
         ScaleTransition scale = new ScaleTransition(FAST, node);
         scale.setInterpolator(MOVE);
         node.setOnMousePressed(e -> scaleTo(scale, 0.97));
-        node.setOnMouseReleased(e -> scaleTo(scale, node.isHover() ? 1.02 : 1.0));
-        node.hoverProperty().addListener((o, a, hover) -> scaleTo(scale, hover ? 1.02 : 1.0));
+        node.setOnMouseReleased(e -> scaleTo(scale, 1.0));
     }
 
     private static void scaleTo(ScaleTransition scale, double value) {
-        if (!enabled()) {
-            scale.getNode().setScaleX(value == 1.02 ? 1.0 : value);
-            scale.getNode().setScaleY(value == 1.02 ? 1.0 : value);
+        if (!enabled() || value == 1.0) {
+            // Snap back exactly to 100% so text is drawn on whole pixels again
+            scale.stop();
+            scale.getNode().setScaleX(value);
+            scale.getNode().setScaleY(value);
             return;
         }
         scale.stop();

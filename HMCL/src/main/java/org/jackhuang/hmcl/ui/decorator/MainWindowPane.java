@@ -85,17 +85,11 @@ final class MainWindowPane extends StackPane {
     /// The transition container used when the title-bar state changes.
     private final TransitionPane navBarPane;
 
-    /// FSL: main tabs in the middle of the title bar.
-    private final FslNavigationTabs tabs;
+    /// FSL: tabs in the middle of the title bar, used to size the page title.
+    private @Nullable FslNavigationTabs titleTabs;
 
-    /// FSL: global search box left of the window buttons.
-    private final FslTopBar search;
-
-    /// FSL: width of the tabs with labels, remembered while they are icon-only.
-    private double fullTabsWidth;
-
-    /// FSL: width of the search box, remembered while it is hidden.
-    private double searchWidth;
+    /// FSL: search box and window buttons, used to size the page title.
+    private @Nullable Node titleRight;
 
     /// Retains listener delegates that are registered through weak listener wrappers.
     @SuppressWarnings("FieldCanBeLocal")
@@ -138,9 +132,17 @@ final class MainWindowPane extends StackPane {
 
         windowButtons = createWindowButtons();
         titleBar = new BorderPane() {
+            /// FSL: the page title gets every pixel left of the tabs. It used to be capped at 180px,
+            /// which cut "安装新游戏 - 26.3" off. The width is the same on every page, so the tabs never
+            /// move when switching pages. Only fixed sizes are used here, so this settles in one pass.
             @Override
             protected void layoutChildren() {
-                fitTitleBar(getWidth() - snappedLeftInset() - snappedRightInset());
+                if (titleTabs != null && titleRight != null) {
+                    double room = Math.max(0, getWidth() - snappedLeftInset() - snappedRightInset()
+                            - titleTabs.prefWidth(-1) - titleRight.prefWidth(-1));
+                    navBarPane.setPrefWidth(room);
+                    navBarPane.setMaxWidth(room);
+                }
                 super.layoutChildren();
             }
         };
@@ -151,7 +153,7 @@ final class MainWindowPane extends StackPane {
         // the window, centered, and cut off on both sides. Let everything shrink to the window.
         titleBar.setMinWidth(0);
         // FSL: global search left of the window buttons; Enter searches mods on the download page
-        search = new FslTopBar(i18n("fsl.search.prompt"), keyword -> {
+        FslTopBar search = new FslTopBar(i18n("fsl.search.prompt"), keyword -> {
             decorator.getNavigator().clear();
             DownloadPage page = Controllers.getDownloadPage();
             Controllers.navigate(page);
@@ -162,20 +164,22 @@ final class MainWindowPane extends StackPane {
         HBox right = new HBox(search, windowButtons);
         right.setAlignment(Pos.CENTER_RIGHT);
         titleBar.setRight(right);
+        titleRight = right;
 
         navBarPane = new TransitionPane();
-        // FSL: the page title gets as much room as it needs; fitTitleBar() makes space for it
         navBarPane.setMinWidth(0);
         FXUtils.setOverflowHidden(navBarPane);
         titleBar.setLeft(navBarPane);
         decorator.capableDraggingWindow(navBarPane);
 
         // FSL: top-level pages as tabs in the middle of the title bar
-        tabs = new FslNavigationTabs(() -> decorator.getNavigator().clear());
+        FslNavigationTabs tabs = new FslNavigationTabs(() -> decorator.getNavigator().clear());
         decorator.getNavigator().addEventHandler(Navigator.NavigationEvent.NAVIGATED, event -> tabs.sync(event.getNode()));
         decorator.forbidDraggingWindow(tabs);
         decorator.forbidDraggingWindow(search);
         titleBar.setCenter(tabs);
+        titleTabs = tabs;
+
         frame.setTop(titleBar);
 
         updateTitleBarBackground();
@@ -190,36 +194,6 @@ final class MainWindowPane extends StackPane {
         decorator.capableDraggingWindow(titleBar);
 
         getChildren().setAll(backgroundNode, frame);
-    }
-
-    /// FSL: makes room for the page title (for example "安装新游戏 - 26.3" next to the back and close
-    /// buttons). When the title, tabs, search box and window buttons do not all fit, the tabs first
-    /// drop their labels (icons stay, names show on hover), then the search box hides. Only a title
-    /// still too long after that ends with "...", and pointing at it shows the whole title.
-    ///
-    /// @param width the width available inside the title bar
-    private void fitTitleBar(double width) {
-        if (tabs == null || search == null || width <= 0) {
-            return;
-        }
-        Node current = navBarPane.getCurrentNode();
-        double left = current == null ? 0 : current.prefWidth(-1);
-        if (!tabs.isCompact()) {
-            fullTabsWidth = tabs.prefWidth(-1);
-        }
-        if (search.isManaged()) {
-            searchWidth = search.prefWidth(-1);
-        }
-        double buttons = windowButtons.prefWidth(-1);
-
-        tabs.setCompact(left + fullTabsWidth + searchWidth + buttons > width);
-        double tabsWidth = tabs.prefWidth(-1);
-
-        boolean showSearch = left + tabsWidth + searchWidth + buttons <= width;
-        search.setVisible(showSearch);
-        search.setManaged(showSearch);
-
-        navBarPane.setMaxWidth(Math.max(0, width - tabsWidth - buttons - (showSearch ? searchWidth : 0)));
     }
 
     /// Moves the custom title bar into or out of the native dragging header.
@@ -338,6 +312,14 @@ final class MainWindowPane extends StackPane {
             return;
         }
 
+        // FSL: sub-pages (install wizard, instance settings...) have long titles such as
+        // "安装新游戏 - 26.3". There the tabs show icons only (names on hover) so the title fits.
+        // Decided once per page, not while laying out, so nothing jumps around.
+        if (titleTabs != null) {
+            String title = state.title();
+            titleTabs.setCompact(decorator.canCloseProperty().get() || title != null && title.length() > 6);
+        }
+
         Node navBar = createNavBar(state);
 
         if (state.animate()) {
@@ -401,7 +383,7 @@ final class MainWindowPane extends StackPane {
             titleLabel.setMinWidth(0);
             titleLabel.setMouseTransparent(true);
             titleArea.getChildren().setAll(titleLabel);
-            // FSL: full title on hover, in case it still had to be shortened
+            // FSL: full title on hover, in case a very long one still had to be shortened
             FXUtils.installFastTooltip(titleArea, state.title());
         }
 
