@@ -85,16 +85,6 @@ public final class FslNavigationTabs extends StackPane {
         getChildren().add(tabs);
     }
 
-    /// Returns whether the tabs show only their icons.
-    public boolean isCompact() {
-        return tabs.isCompact();
-    }
-
-    /// Shows only the icons (`true`) or icons with labels (`false`).
-    public void setCompact(boolean value) {
-        tabs.setCompact(value);
-    }
-
     /// Opens a destination.
     private void open(Destination destination) {
         if (destination == Destination.ONLINE && TerracottaMetadata.PROVIDER == null) {

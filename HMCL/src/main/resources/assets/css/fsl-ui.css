@@ -510,7 +510,7 @@
 
 /* ---------- Title-bar tabs ---------- */
 .fsl-tab {
-    -fx-padding: 5 12 5 12;
+    -fx-padding: 5 8 5 8;
     -fx-background-radius: 8;
     -fx-cursor: hand;
 }
@@ -983,8 +983,10 @@
 
 /* Title bar must fit a 960px-wide window: tabs (434) + page title + search + window buttons.
  * A 220px search box pushed the row past the window width. */
+/* Narrow search box and tabs leave the page title room for "安装新游戏 - 26.3" next to back/close.
+ * These sizes never change between pages, so the tabs stay in the same place everywhere. */
 .fsl-search {
-    -fx-pref-width: 150;
+    -fx-pref-width: 96;
 }
 
 /* ---------- Only options light up, never the frame around them ----------
