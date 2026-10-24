@@ -282,7 +282,9 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
                     : wait.verificationUri();
 
             var qrCode = new SVGPath();
-            qrCode.fillProperty().bind(Themes.colorSchemeProperty().getPrimary());
+            // FSL: phone scanners need dark modules on a light background with a quiet zone around them;
+            // the light-purple code on the dark theme could not be detected
+            qrCode.setFill(javafx.scene.paint.Color.BLACK);
             qrCode.setContent(QrCodeUtils.toSVGPath(QrCode.encodeText(scanUri, QrCode.Ecc.MEDIUM)));
             qrCode.setScaleX(3);
             qrCode.setScaleY(3);
@@ -297,7 +299,13 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
             FXUtils.onClicked(codeBox, () -> FXUtils.copyText(wait.userCode()));
             codeBox.setMaxWidth(USE_PREF_SIZE);
 
-            leftVBox.getChildren().setAll(new Group(qrCode), codeBox);
+            // 4 modules of white quiet zone (each module is 3px after scaling)
+            var qrBox = new StackPane(new Group(qrCode));
+            qrBox.setStyle("-fx-background-color: #FFFFFF; -fx-background-radius: 6; -fx-padding: 12;");
+            qrBox.setMaxWidth(USE_PREF_SIZE);
+            qrBox.setMaxHeight(USE_PREF_SIZE);
+
+            leftVBox.getChildren().setAll(qrBox, codeBox);
 
             // FSL: no "visit the link and enter the code" hint next to the QR code
             if (warningPane.getChildren().isEmpty()) {
