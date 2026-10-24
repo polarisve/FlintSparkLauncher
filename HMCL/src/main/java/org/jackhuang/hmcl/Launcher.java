@@ -351,6 +351,12 @@ public final class Launcher extends Application {
 
             LOG.info("Zlib Compatible: " + ZlibUtils.IS_ZLIB_COMPATIBLE);
 
+            // FSL: like PCL, only one launcher; a second launch brings the first window to the front
+            if (!FslSingleInstance.acquire(Metadata.HMCL_USER_HOME)) {
+                EntryPoint.exit(0);
+                return;
+            }
+
             Lang.thread(SystemInfo::initialize, "Detection System Information", true);
 
             try {
