@@ -101,9 +101,6 @@ public final class Decorator {
     /// The minimum height, in pixels, including the 450-pixel background and 40-pixel title bar.
     private static final double MIN_CONTENT_HEIGHT = 450.0 + 40.0;
 
-    /// The minimum visible overlap, in pixels, used to accept a persisted window position.
-    private static final double MIN_VISIBLE_WINDOW_AREA = 20.0;
-
     /// The primary-screen bounds used by the persisted normalized window coordinates.
     private static final Rectangle2D PRIMARY_SCREEN_BOUNDS = Screen.getPrimary().getBounds();
 
@@ -716,31 +713,15 @@ public final class Decorator {
 
     /// Returns the persisted normal content rectangle without native borders or custom shadow padding.
     ///
-    /// An off-screen persisted position is replaced with a position centered on the primary screen.
+    /// FSL: the saved position is ignored; the window always starts centered on the primary screen.
     ///
     /// @return the initial content bounds in JavaFX screen coordinates
     private Rectangle2D initialContentBounds() {
         double initialContentWidth = Math.max(MIN_CONTENT_WIDTH, SettingsManager.state().getWidth());
         double initialContentHeight = Math.max(MIN_CONTENT_HEIGHT, SettingsManager.state().getHeight());
-        double initialContentX = SettingsManager.state().getX() * PRIMARY_SCREEN_BOUNDS.getWidth();
-        double initialContentY = SettingsManager.state().getY() * PRIMARY_SCREEN_BOUNDS.getHeight();
-
-        boolean visible = false;
-        for (Screen screen : Screen.getScreens()) {
-            Rectangle2D bounds = screen.getBounds();
-            if (bounds.getMinX() + MIN_VISIBLE_WINDOW_AREA <= initialContentX + initialContentWidth
-                    && initialContentX <= bounds.getMaxX() - MIN_VISIBLE_WINDOW_AREA
-                    && bounds.getMinY() + MIN_VISIBLE_WINDOW_AREA <= initialContentY
-                    && initialContentY <= bounds.getMaxY() - MIN_VISIBLE_WINDOW_AREA) {
-                visible = true;
-                break;
-            }
-        }
-
-        if (!visible) {
-            initialContentX = (PRIMARY_SCREEN_BOUNDS.getWidth() - initialContentWidth) / 2;
-            initialContentY = (PRIMARY_SCREEN_BOUNDS.getHeight() - initialContentHeight) / 2;
-        }
+        // FSL: like PCL, every start puts the window in the middle of the screen; only the size is kept
+        double initialContentX = PRIMARY_SCREEN_BOUNDS.getMinX() + (PRIMARY_SCREEN_BOUNDS.getWidth() - initialContentWidth) / 2;
+        double initialContentY = PRIMARY_SCREEN_BOUNDS.getMinY() + (PRIMARY_SCREEN_BOUNDS.getHeight() - initialContentHeight) / 2;
 
         return new Rectangle2D(initialContentX, initialContentY, initialContentWidth, initialContentHeight);
     }
