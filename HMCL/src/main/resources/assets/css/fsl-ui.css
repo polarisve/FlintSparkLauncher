@@ -1012,11 +1012,6 @@
     -fx-border-color: #C4B1FF;
 }
 
-/* Instance folders in the left column: show the whole name and path on several lines */
-.fsl-page-side .game-directory-list-item > .rippler-container > BorderPane {
-    -fx-padding: 8 4 8 8;
-}
-
 /* The header row of an expandable settings group is itself an option: it still lights up */
 .options-sublist-header:hover {
     -fx-background-color: rgba(167, 139, 250, 0.14);
@@ -1029,4 +1024,74 @@
 
 .options-sublist .options-list-item.no-padding:hover {
     -fx-background-color: transparent;
+}
+
+/* ---------- Instance folders in the left column ----------
+ * Same look as the other side items: no card behind them, one rounded highlight.
+ * The item used to draw a card plus a square selected background that stuck out of the column. */
+.fsl-page-side .game-directory-list-item {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-effect: null;
+    -fx-padding: 0;
+}
+
+.fsl-page-side .game-directory-list-item > .rippler-container > BorderPane {
+    -fx-padding: 6 2 6 6;
+    -fx-background-radius: 10;
+    -fx-background-color: transparent;
+}
+
+.fsl-page-side .game-directory-list-item:hover > .rippler-container > BorderPane {
+    -fx-background-color: rgba(167, 139, 250, 0.16);
+}
+
+.fsl-page-side .game-directory-list-item:selected > .rippler-container > BorderPane {
+    -fx-background-color: -fsl2-primary;
+}
+
+.fsl-page-side .game-directory-list-item:selected:hover > .rippler-container > BorderPane {
+    -fx-background-color: -fsl2-primary-hover;
+}
+
+.fsl-page-side .game-directory-list-item .two-line-list-item {
+    -fx-padding: 0 0 0 2;
+    -fx-spacing: 1;
+}
+
+.fsl-page-side .game-directory-list-item .two-line-list-item > .first-line > .title {
+    -fx-text-fill: -fsl2-text;
+    -fx-font-size: 13px;
+    -fx-padding: 0;
+}
+
+.fsl-page-side .game-directory-list-item .two-line-list-item > HBox > .subtitle {
+    -fx-text-fill: -fsl2-muted;
+    -fx-font-size: 10px;
+}
+
+.fsl-page-side .game-directory-list-item .svg {
+    -fx-fill: -fsl2-muted;
+}
+
+.fsl-page-side .game-directory-list-item:selected .two-line-list-item > .first-line > .title {
+    -fx-text-fill: -fsl2-on-primary;
+    -fx-font-weight: bold;
+}
+
+.fsl-page-side .game-directory-list-item:selected .two-line-list-item > HBox > .subtitle {
+    -fx-text-fill: rgba(22, 15, 43, 0.75);
+}
+
+.fsl-page-side .game-directory-list-item:selected .svg {
+    -fx-fill: -fsl2-on-primary;
+}
+
+/* Remove button stays plain; slight tint only when pointed at */
+.fsl-page-side .game-directory-list-item .toggle-icon4 {
+    -fx-background-color: transparent;
+}
+
+.fsl-page-side .game-directory-list-item .toggle-icon4:hover {
+    -fx-background-color: rgba(22, 15, 43, 0.18);
 }
