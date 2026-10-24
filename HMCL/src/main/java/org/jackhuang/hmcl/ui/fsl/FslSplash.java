@@ -42,7 +42,7 @@ import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 @NotNullByDefault
 public final class FslSplash {
     /// Size of the icon on screen, in logical pixels.
-    private static final double SIZE = 80;
+    private static final double SIZE = 104;
     /// The icon stays at least this long, so a fast start does not just flash it.
     private static final Duration MIN_SHOWN = Duration.millis(600);
 
