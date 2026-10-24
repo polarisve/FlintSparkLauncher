@@ -949,3 +949,21 @@
     -fx-background-color: #44396A;
     -fx-border-color: #C4B1FF;
 }
+
+/* ---------- Selected item keeps its purple on hover ----------
+ * The hover rule above comes later than the selected rule, so pointing at the selected item
+ * used to replace the solid purple with the faint hover tint (looked grey). Selected + hover
+ * now stays purple, just a touch brighter. */
+.fsl-page-side .advanced-list-item:selected:hover > .rippler-container > .container,
+.advanced-list-item:selected:hover > .rippler-container > .container {
+    -fx-background-color: -fsl2-primary-hover;
+    -fx-border-color: transparent;
+}
+
+.fsl-page-side .advanced-list-item:selected:hover > .rippler-container > .container > .two-line-list-item > .first-line > .title {
+    -fx-text-fill: -fsl2-on-primary;
+}
+
+.fsl-page-side .advanced-list-item:selected:hover .svg {
+    -fx-fill: -fsl2-on-primary;
+}
