@@ -78,7 +78,9 @@ public class GameListPage extends DecoratorAnimatedPage implements DecoratorPage
     public GameListPage() {
         gameDirectoryListItems = MappedObservableList.create(GameDirectoryManager.getGameDirectories(), gameDirectory -> {
             GameDirectoryListItem item = new GameDirectoryListItem(gameDirectory);
-            FXUtils.setLimitWidth(item, 200);
+            // FSL: fill the column inside its padding; a fixed 200px stuck out past the right edge
+            item.setMinWidth(0);
+            item.setMaxWidth(Double.MAX_VALUE);
             FXUtils.onSecondaryButtonClicked(item, () -> {
                 PopupMenu menu = new PopupMenu();
                 JFXPopup popup = new JFXPopup(menu);
