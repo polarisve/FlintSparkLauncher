@@ -278,18 +278,21 @@ public final class MainPage extends StackPane implements DecoratorPage {
             menuButton = new JFXButton();
             menuButton.getStyleClass().add("menu-button");
             menuButton.setOnAction(e -> {
-                if (GameListPopupMenu.hideShowing(menuButton)) {
+                if (GameListPopupMenu.hideShowing(launchPane)) {
                     return;
                 }
 
+                // FSL: open above the launch button, starting at its left edge so the list stays inside
+                // the window (aligning to the small triangle pushed it past the left edge when maximized)
                 JFXPopup popup = GameListPopupMenu.showAndGetPopup(
-                        menuButton,
+                        launchPane,
                         JFXPopup.PopupVPosition.BOTTOM,
-                        JFXPopup.PopupHPosition.RIGHT,
+                        JFXPopup.PopupHPosition.LEFT,
                         0,
-                        -menuButton.getHeight(),
+                        -launchPane.getHeight() - 8,
                         instances
                 );
+                popup.getStyleClass().add("fsl-version-popup");
 
                 Node graphic = menuButton.getGraphic();
                 if (graphic != null) {

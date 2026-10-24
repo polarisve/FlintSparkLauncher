@@ -489,8 +489,9 @@
     -fx-max-width: 168px;
     -fx-min-width: 168px;
     -fx-background-radius: 8 0 0 8;
-    -fx-border-color: transparent rgba(22, 15, 43, 0.35) transparent transparent;
-    -fx-border-width: 0 1 0 0;
+    /* FSL: clear divider between "start game" and the small triangle */
+    -fx-border-color: transparent rgba(22, 15, 43, 0.75) transparent transparent;
+    -fx-border-width: 0 2 0 0;
 }
 
 .launch-pane > .jfx-button.menu-button {
@@ -668,6 +669,19 @@
 
 .popup-menu-content .advanced-list-item .two-line-list-item > .second-line > .subtitle Text {
     -fx-fill: #FFFFFF;
+}
+
+/* The version popup gets a visible purple frame */
+.fsl-version-popup .jfx-popup-container {
+    -fx-background-color: #2E2645;
+    -fx-background-radius: 10;
+    -fx-border-color: rgba(167, 139, 250, 0.75);
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+}
+
+.fsl-version-popup .popup-menu-content {
+    -fx-padding: 4;
 }
 
 /* ---------- Dialog buttons ----------

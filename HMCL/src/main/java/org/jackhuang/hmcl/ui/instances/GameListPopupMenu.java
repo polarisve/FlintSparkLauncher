@@ -94,6 +94,11 @@ public final class GameListPopupMenu extends StackPane {
         menu.getItems().setAll(instances.stream()
                 .map(GameItem::new)
                 .toList());
+        // FSL: a popup opening upwards must not grow past the top of the window
+        if (vAlign == JFXPopup.PopupVPosition.BOTTOM && owner instanceof Region region) {
+            double bottom = owner.localToScene(0, 0).getY() + region.getHeight() + initOffsetY;
+            menu.setMaxHeight(Math.max(60, Math.min(menu.getMaxHeight(), bottom - 8)));
+        }
         JFXPopup popup = new JFXPopup(menu);
         owner.getProperties().put(KEY, popup);
         popup.addEventFilter(WindowEvent.WINDOW_HIDDEN, event -> owner.getProperties().remove(KEY, popup));
