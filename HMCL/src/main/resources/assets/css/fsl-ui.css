@@ -1097,3 +1097,43 @@
 .fsl-page-side .game-directory-list-item .toggle-icon4:hover {
     -fx-background-color: rgba(22, 15, 43, 0.18);
 }
+
+/* ---------- Global search box ----------
+ * Magnifier at the right end of the box (click = search, same as Enter). Text stops before it. */
+.fsl-search {
+    -fx-padding: 0 26 0 10;
+}
+
+.fsl-search-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8;
+    -fx-padding: 4 6 4 6;
+    -fx-cursor: hand;
+}
+
+.fsl-search-button .svg {
+    -fx-fill: -fsl2-muted;
+}
+
+.fsl-search-button:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.16);
+}
+
+.fsl-search-button:hover .svg {
+    -fx-fill: -fsl2-primary;
+}
+
+/* Result menu under the search box */
+.fsl-search-menu .iconed-menu-item .label {
+    -fx-text-fill: -fsl2-text;
+}
+
+.fsl-search-menu .iconed-menu-item .svg {
+    -fx-fill: -fsl2-primary;
+}
+
+.fsl-search-menu-title {
+    -fx-text-fill: -fsl2-muted;
+    -fx-font-size: 11px;
+    -fx-padding: 6 16 2 16;
+}

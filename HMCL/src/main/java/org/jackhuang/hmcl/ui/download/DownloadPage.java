@@ -225,12 +225,14 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
         return state.getReadOnlyProperty();
     }
 
-    public void showGameDownloads() {
+    public VersionsPage showGameDownloads() {
         tab.select(newGameTab, false);
+        return newGameTab.getNode();
     }
 
-    public void showModpackDownloads() {
+    public DownloadListPage showModpackDownloads() {
         tab.select(modpackTab, false);
+        return modpackTab.getNode();
     }
 
     public DownloadListPage showResourcePackDownloads() {
@@ -238,13 +240,19 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
         return resourcePackTab.getNode();
     }
 
+    public DownloadListPage showShaderDownloads() {
+        tab.select(shaderTab, false);
+        return shaderTab.getNode();
+    }
+
     public DownloadListPage showModDownloads() {
         tab.select(modTab, false);
         return modTab.getNode();
     }
 
-    public void showWorldDownloads() {
+    public DownloadListPage showWorldDownloads() {
         tab.select(worldTab, false);
+        return worldTab.getNode();
     }
 
     private static final class DownloadNavigator implements Navigation {
