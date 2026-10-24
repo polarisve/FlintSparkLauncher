@@ -21,17 +21,13 @@ import com.jfoenix.controls.JFXButton;
 import com.jfoenix.controls.JFXDialogLayout;
 import com.jfoenix.controls.JFXProgressBar;
 import com.jfoenix.controls.JFXSpinner;
-import io.nayuki.qrcodegen.QrCode;
 import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.css.PseudoClass;
 import javafx.geometry.Pos;
-import javafx.scene.Cursor;
-import javafx.scene.Group;
 import javafx.scene.control.Label;
 import javafx.scene.layout.*;
-import javafx.scene.shape.SVGPath;
 import org.jackhuang.hmcl.auth.Account;
 import org.jackhuang.hmcl.auth.AuthInfo;
 import org.jackhuang.hmcl.auth.AuthenticationException;
@@ -43,24 +39,20 @@ import org.jackhuang.hmcl.setting.Accounts;
 import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.task.TaskExecutor;
-import org.jackhuang.hmcl.theme.Themes;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.WeakListenerHolder;
 import org.jackhuang.hmcl.ui.construct.*;
 import org.jackhuang.hmcl.upgrade.IntegrityChecker;
 import org.jackhuang.hmcl.util.FslWebComponent;
-import org.jackhuang.hmcl.util.QrCodeUtils;
 import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.i18n.I18n;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Locale;
-import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.function.Consumer;
 
-import static org.jackhuang.hmcl.setting.SettingsManager.settings;
 import static org.jackhuang.hmcl.ui.FXUtils.onEscPressed;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 import static org.jackhuang.hmcl.util.logging.Logger.LOG;
@@ -76,7 +68,6 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
     private final ObjectProperty<Step> step = new SimpleObjectProperty<>();
 
     private TaskExecutor browserTaskExecutor;
-    private TaskExecutor deviceTaskExecutor;
 
     private final JFXButton btnLogin;
     private final SpinnerPane loginButtonSpinner;
@@ -125,21 +116,10 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
                 step.set(new Step.WaitForOpenBrowser(event.getUrl()));
         }));
 
-        holder.registerWeak(Accounts.OAUTH_CALLBACK.onGrantDeviceCode, event -> Platform.runLater(() -> {
-            if (step.get() instanceof Step.StartDeviceCodeLogin)
-                step.set(new Step.WaitForScanQrCode(event.getUserCode(), event.getVerificationUri()));
-        }));
-
-        holder.registerWeak(Accounts.OAUTH_CALLBACK.onLoginCompletedDeviceCode, event -> Platform.runLater(() -> {
-            if (step.get() instanceof Step.WaitForScanQrCode)
-                step.set(new Step.DeviceLoginCompleted());
-        }));
-
         // FSL: after the user signs in, show which verification step is running
         holder.registerWeak(Accounts.OAUTH_CALLBACK.onLoginStage, event -> Platform.runLater(() -> {
             Step current = step.get();
             if (current instanceof Step.WaitForOpenBrowser
-                    || current instanceof Step.DeviceLoginCompleted
                     || current instanceof Step.Verifying) {
                 step.set(new Step.Verifying(event.getStage()));
             }
@@ -217,16 +197,6 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
             self[0] = browserTaskExecutor = Task.supplyAsync(() -> Accounts.FACTORY_MICROSOFT.create(null, null, null, null, OAuth.GrantFlow.AUTHORIZATION_CODE))
                     .whenComplete(Schedulers.javafx(), (account, exception) -> onLoginCompleted(self[0], account, exception))
                     .executor(true);
-        } else if (currentStep instanceof Step.StartDeviceCodeLogin) {
-            loginButtonSpinner.setLoading(true);
-            cancelAllTasks();
-
-            rootContainer.getChildren().add(new JFXSpinner());
-
-            TaskExecutor[] self = new TaskExecutor[1];
-            self[0] = deviceTaskExecutor = Task.supplyAsync(() -> Accounts.FACTORY_MICROSOFT.create(null, null, null, null, OAuth.GrantFlow.DEVICE))
-                    .whenComplete(Schedulers.javafx(), (account, exception) -> onLoginCompleted(self[0], account, exception))
-                    .executor(true);
         } else if (currentStep instanceof Step.WaitForOpenBrowser wait) {
             @Nullable NativeClientOAuthSession nativeSession = Accounts.OAUTH_CALLBACK.getNativeSession();
             if (nativeSession != null) {
@@ -260,69 +230,6 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
 
                 rootContainer.getChildren().add(hintPane);
             }
-        } else if (currentStep instanceof Step.WaitForScanQrCode wait) {
-            loginButtonSpinner.setLoading(true);
-
-            VBox leftVBox = new VBox(6);
-            leftVBox.setAlignment(Pos.CENTER);
-            VBox rightVBox = new VBox(6);
-
-            HBox hbox = new HBox(leftVBox, rightVBox);
-
-            leftVBox.prefWidthProperty().bind(hbox.widthProperty().divide(2));
-            rightVBox.prefWidthProperty().bind(hbox.widthProperty().divide(2));
-            leftVBox.setMaxWidth(Double.MAX_VALUE);
-            rightVBox.setMaxWidth(Double.MAX_VALUE);
-
-            HBox.setHgrow(leftVBox, Priority.ALWAYS);
-            HBox.setHgrow(rightVBox, Priority.ALWAYS);
-
-            String scanUri = "https://www.microsoft.com/link".equals(wait.verificationUri())
-                    ? "https://www.microsoft.com/link?otc=" + wait.userCode()
-                    : wait.verificationUri();
-
-            var qrCode = new SVGPath();
-            // FSL: phone scanners need dark modules on a light background with a quiet zone around them;
-            // the light-purple code on the dark theme could not be detected
-            qrCode.setFill(javafx.scene.paint.Color.BLACK);
-            qrCode.setContent(QrCodeUtils.toSVGPath(QrCode.encodeText(scanUri, QrCode.Ecc.MEDIUM)));
-            qrCode.setScaleX(3);
-            qrCode.setScaleY(3);
-
-            var lblCode = new Label(wait.userCode());
-            lblCode.getStyleClass().add("code-label");
-            lblCode.setStyle("-fx-font-family: \"" + Objects.requireNonNullElse(settings().logFontFamilyProperty().get(), FXUtils.DEFAULT_MONOSPACE_FONT) + "\";");
-
-            var codeBox = new StackPane(lblCode);
-            codeBox.getStyleClass().add("code-box");
-            codeBox.setCursor(Cursor.HAND);
-            FXUtils.onClicked(codeBox, () -> FXUtils.copyText(wait.userCode()));
-            codeBox.setMaxWidth(USE_PREF_SIZE);
-
-            // 4 modules of white quiet zone (each module is 3px after scaling)
-            var qrBox = new StackPane(new Group(qrCode));
-            qrBox.setStyle("-fx-background-color: #FFFFFF; -fx-background-radius: 6; -fx-padding: 12;");
-            qrBox.setMaxWidth(USE_PREF_SIZE);
-            qrBox.setMaxHeight(USE_PREF_SIZE);
-
-            leftVBox.getChildren().setAll(qrBox, codeBox);
-
-            // FSL: no "visit the link and enter the code" hint next to the QR code
-            if (warningPane.getChildren().isEmpty()) {
-                leftVBox.prefWidthProperty().unbind();
-                leftVBox.setPrefWidth(USE_COMPUTED_SIZE);
-                rootContainer.getChildren().setAll(leftVBox);
-            } else {
-                rightVBox.getChildren().setAll(warningPane);
-                rootContainer.getChildren().setAll(hbox);
-            }
-        } else if (currentStep instanceof Step.DeviceLoginCompleted) {
-            loginButtonSpinner.setLoading(true);
-
-            var hintPane = new HintPane(MessageDialogPane.MessageType.INFO);
-            hintPane.setSegment(i18n("account.methods.microsoft.methods.device.hint.completed"));
-
-            rootContainer.getChildren().addAll(hintPane);
         } else if (currentStep instanceof Step.Verifying verifying) {
             // FSL: signed in to Microsoft; the launcher is now verifying the account step by step
             loginButtonSpinner.setLoading(true);
@@ -361,15 +268,7 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
         linkBox.setAlignment(Pos.CENTER_LEFT);
         linkBox.setPrefWrapLength(500);
 
-        if (currentStep instanceof Step.Init || currentStep instanceof Step.StartAuthorizationCodeLogin || currentStep instanceof Step.WaitForOpenBrowser) {
-            JFXHyperlink useQrCode = new JFXHyperlink(i18n("account.methods.microsoft.methods.device"));
-            useQrCode.setOnAction(e -> this.step.set(new Step.StartDeviceCodeLogin()));
-            linkBox.getChildren().add(useQrCode);
-        } else if (currentStep instanceof Step.StartDeviceCodeLogin || currentStep instanceof Step.WaitForScanQrCode) {
-            JFXHyperlink userBrowser = new JFXHyperlink(i18n("account.methods.microsoft.methods.browser"));
-            userBrowser.setOnAction(e -> this.step.set(new Step.StartAuthorizationCodeLogin()));
-            linkBox.getChildren().add(userBrowser);
-        }
+        // FSL: QR code login removed; only the window login is offered
 
         JFXHyperlink profileLink = new JFXHyperlink(i18n("account.methods.microsoft.profile"));
         profileLink.setExternalLink("https://account.live.com/editprof.aspx");
@@ -384,7 +283,6 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
 
     private void cancelAllTasks() {
         if (browserTaskExecutor != null) browserTaskExecutor.cancel();
-        if (deviceTaskExecutor != null) deviceTaskExecutor.cancel();
         // FSL: unblock a login waiting for the embedded window and close that window
         Accounts.OAUTH_CALLBACK.cancelNativeSession();
         if (FslWebComponent.isLoaded()) FslMicrosoftLoginWindow.close();
@@ -457,17 +355,6 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
         }
 
         record WaitForOpenBrowser(String url) implements Step {
-
-        }
-
-        final class StartDeviceCodeLogin implements Step {
-        }
-
-        record WaitForScanQrCode(String userCode, String verificationUri) implements Step {
-
-        }
-
-        record DeviceLoginCompleted() implements Step {
 
         }
 
