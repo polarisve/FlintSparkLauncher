@@ -220,7 +220,18 @@ public final class FslMergedAddonRepository implements RemoteAddonRepository {
         int totalPages = Math.max(
                 modrinthResult != null ? modrinthResult.totalPages() : 0,
                 curseResult != null ? curseResult.totalPages() : 0);
-        return new SearchResult(merged.stream(), totalPages);
+        return new SearchResult(merged.stream(), totalPages, totalCount(modrinthResult, curseResult));
+    }
+
+    /// FSL: adds up the totals both sources report; `-1` when no source knows its total.
+    private static long totalCount(@Nullable SearchResult a, @Nullable SearchResult b) {
+        long total = -1;
+        for (@Nullable SearchResult result : new SearchResult[]{a, b}) {
+            if (result != null && result.totalCount() >= 0) {
+                total = Math.max(total, 0) + result.totalCount();
+            }
+        }
+        return total;
     }
 
     /// Runs one backend search, rethrowing I/O errors unchecked so it can run in a future.

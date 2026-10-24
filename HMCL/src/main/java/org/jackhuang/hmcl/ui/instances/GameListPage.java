@@ -121,7 +121,7 @@ public class GameListPage extends DecoratorAnimatedPage implements DecoratorPage
             setLeft(pane, bottomLeftCornerList);
         }
 
-        setCenter(new GameList());
+        setCenter(gameList);
 
         FXUtils.applyDragListener(this, file -> ModpackHelper.isFileModpackByExtension(file) || "json".equalsIgnoreCase(FileUtils.getNameWithoutExtension(file)), files -> {
             Path file = files.get(0);
@@ -143,8 +143,19 @@ public class GameListPage extends DecoratorAnimatedPage implements DecoratorPage
         return state.getReadOnlyProperty();
     }
 
+    /// FSL: the instance list, kept so the search page can filter it.
+    private final GameList gameList = new GameList();
+
+    /// FSL: opens the list's search bar with `keyword`, as if it had been typed there.
+    public void searchFor(String keyword) {
+        gameList.externalKeyword.set(null);
+        gameList.externalKeyword.set(keyword);
+    }
+
     private static class GameList extends ListPageBase<GameListItem> {
         private final WeakListenerHolder listenerHolder = new WeakListenerHolder();
+        /// FSL: keyword pushed from the search page; the skin opens its search bar with it.
+        private final javafx.beans.property.StringProperty externalKeyword = new javafx.beans.property.SimpleStringProperty(this, "externalKeyword");
 
         private final ObservableList<GameListItem> sourceList = FXCollections.observableArrayList();
         private final FilteredList<GameListItem> filteredList = new FilteredList<>(sourceList);
@@ -292,6 +303,14 @@ public class GameListPage extends DecoratorAnimatedPage implements DecoratorPage
 
                 pane.getChildren().setAll(root);
                 getChildren().setAll(pane);
+
+                // FSL: keyword from the search page; also applied if it was sent before this skin existed
+                FXUtils.onChangeAndOperate(skinnable.externalKeyword, keyword -> {
+                    if (keyword != null) {
+                        changeToolbar(searchBar);
+                        searchField.setText(keyword);
+                    }
+                });
             }
 
             private void changeToolbar(HBox newToolbar) {

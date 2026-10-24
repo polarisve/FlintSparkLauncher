@@ -1129,6 +1129,17 @@
     -fx-fill: -fsl2-primary;
 }
 
+/* FSL search page: one card per kind, showing how many matches it has */
+.fsl-search-card:hover, .fsl-search-card:focused {
+    -fx-border-color: -fsl2-primary;
+}
+
+.fsl-search-count {
+    -fx-font-size: 30px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fsl2-primary;
+}
+
 .fsl-search-row {
     -fx-padding: 6 8 6 8;
     -fx-background-radius: 10;

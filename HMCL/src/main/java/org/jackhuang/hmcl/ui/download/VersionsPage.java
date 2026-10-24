@@ -481,6 +481,8 @@ public final class VersionsPage extends Control implements WizardPage, Refreshab
             // FSL: keyword from the global search; applied once the list exists
             FXUtils.onChangeAndOperate(control.externalKeyword, keyword -> {
                 if (keyword != null) {
+                    // The search page counts every version type, so show them all here too
+                    categoryField.getSelectionModel().select(VersionTypeFilter.ALL);
                     nameField.setText(keyword);
                 }
             });

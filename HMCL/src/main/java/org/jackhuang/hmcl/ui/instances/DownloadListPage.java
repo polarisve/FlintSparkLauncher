@@ -142,6 +142,15 @@ public class DownloadListPage extends Control implements DecoratorPage, PageAwar
                 .results().collect(Collectors.toList());
     }
 
+    /// FSL: asks every source of this page how many results `keyword` has, for the aggregated search page.
+    /// Waits for slow sources, so call it off the FX thread.
+    ///
+    /// @return the total, or `-1` when no source reports one
+    public long countOnce(String keyword) throws java.io.IOException {
+        return repository.search(downloadProvider, type, "", null, 0, 1, keyword,
+                RemoteAddonRepository.SortType.RELEVANCY, RemoteAddonRepository.SortOrder.DESC).totalCount();
+    }
+
     /// FSL: opens the detail page of a result found by [#searchOnce(String, int)].
     public void openAddon(RemoteAddon addon) {
         Controllers.navigate(new DownloadPage(this, addon, getInstanceOptional(), callback));
@@ -614,9 +623,12 @@ public class DownloadListPage extends Control implements DecoratorPage, PageAwar
 
                 FXUtils.onChange(control.downloadSource, v -> searchAction.handle(null));
                 nameField.setOnAction(searchAction);
-                FXUtils.onChange(control.externalKeyword, keyword -> {
+                // FSL: also applies a keyword sent before this skin existed (first visit to the tab);
+                // otherwise 查看全部 from the search page showed the default list
+                FXUtils.onChangeAndOperate(control.externalKeyword, keyword -> {
                     if (keyword != null) {
                         nameField.setText(keyword);
+                        control.pageOffset.set(0);
                         searchAction.handle(null);
                     }
                 });
