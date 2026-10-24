@@ -239,7 +239,7 @@ public final class FslSearchPage extends StackPane implements DecoratorPage {
             VBox.setVgrow(middle, Priority.ALWAYS);
 
             root.getChildren().setAll(header, middle);
-            root.getStyleClass().add("fsl-search-card");
+            root.getStyleClass().add("fsl-search-count-card");
             root.setMinSize(0, 0);
             root.setPrefSize(0, 0);
             root.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
