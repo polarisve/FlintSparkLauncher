@@ -510,7 +510,9 @@
 
 /* ---------- Title-bar tabs ---------- */
 .fsl-tab {
-    -fx-padding: 5 8 5 8;
+    /* FSL: the icons have empty space on their left inside the glyph box, so the right side gets
+       2px more padding to make the purple pill look evenly spaced around icon + text */
+    -fx-padding: 5 10 5 8;
     -fx-background-radius: 8;
     -fx-cursor: hand;
 }
