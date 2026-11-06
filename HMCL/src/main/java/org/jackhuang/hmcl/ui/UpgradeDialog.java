@@ -42,7 +42,7 @@ public final class UpgradeDialog extends JFXDialogLayout {
         heading.setPadding(new Insets(0, 0, 8, 0));
         setHeading(heading);
 
-        // FSL: the release notes come with the update JSON; the link opens the GitHub release page
+        // FSL: the release notes come with the update JSON; the link opens the release page
         String url = StringUtils.isNotBlank(remoteVersion.page()) ? remoteVersion.page() : Metadata.PUBLISH_URL;
         String changelog = remoteVersion.changelog();
 

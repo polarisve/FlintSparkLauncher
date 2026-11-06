@@ -20,6 +20,7 @@ package org.jackhuang.hmcl.upgrade;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import org.glavo.url.WebURL;
 import org.jackhuang.hmcl.task.FileDownloadTask.IntegrityCheck;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.NetworkUtils;
@@ -27,14 +28,18 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
-public record RemoteVersion(UpdateChannel channel, String version, String url, Type type, IntegrityCheck integrityCheck,
+public record RemoteVersion(UpdateChannel channel, String version, List<String> urls, Type type, IntegrityCheck integrityCheck,
                             boolean preview, boolean force, @Nullable String changelog, @Nullable String page) {
 
-    public static RemoteVersion fetch(UpdateChannel channel, boolean preview, String url) throws IOException {
+    /// Fetches the update JSON from the first source that answers.
+    public static RemoteVersion fetch(UpdateChannel channel, boolean preview, List<String> sources) throws IOException {
         try {
-            JsonObject response = JsonUtils.fromNonNullJson(NetworkUtils.doGet(url), JsonObject.class);
+            JsonObject response = JsonUtils.fromNonNullJson(
+                    NetworkUtils.doGet(sources.stream().map(WebURL::parse).toList()), JsonObject.class);
             String version = Optional.ofNullable(response.get("version")).map(JsonElement::getAsString).orElseThrow(() -> new IOException("version is missing"));
             String jarUrl = Optional.ofNullable(response.get("jar")).map(JsonElement::getAsString).orElse(null);
             String jarHash = Optional.ofNullable(response.get("jarsha1")).map(JsonElement::getAsString).orElse(null);
@@ -43,7 +48,17 @@ public record RemoteVersion(UpdateChannel channel, String version, String url, T
             String changelog = Optional.ofNullable(response.get("changelog")).map(JsonElement::getAsString).orElse(null);
             String page = Optional.ofNullable(response.get("page")).map(JsonElement::getAsString).orElse(null);
             if (jarUrl != null && jarHash != null) {
-                return new RemoteVersion(channel, version, jarUrl, Type.JAR, new IntegrityCheck("SHA-1", jarHash), preview, force, changelog, page);
+                // FSL: "mirrors" lists fallback download URLs for the same jar
+                List<String> urls = new ArrayList<>();
+                urls.add(jarUrl);
+                JsonElement mirrors = response.get("mirrors");
+                if (mirrors != null && mirrors.isJsonArray()) {
+                    for (JsonElement mirror : mirrors.getAsJsonArray()) {
+                        String m = mirror.getAsString();
+                        if (!urls.contains(m)) urls.add(m);
+                    }
+                }
+                return new RemoteVersion(channel, version, List.copyOf(urls), Type.JAR, new IntegrityCheck("SHA-1", jarHash), preview, force, changelog, page);
             } else {
                 throw new IOException("No download url is available");
             }
@@ -54,7 +69,7 @@ public record RemoteVersion(UpdateChannel channel, String version, String url, T
 
     @Override
     public @NotNull String toString() {
-        return "[" + version + " from " + url + "]";
+        return "[" + version + " from " + urls + "]";
     }
 
     public enum Type {
