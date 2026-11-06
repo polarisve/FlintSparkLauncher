@@ -54,8 +54,8 @@ public final class UpgradeDialog extends JFXDialogLayout {
         scrollPane.setFitToWidth(true);
         FXUtils.smoothScrolling(scrollPane);
 
-        // FSL: show which sites (Gitee / GitHub) offer this update
-        Label source = new Label(i18n("update.source", String.join(i18n("update.source.separator"), remoteVersion.sources())));
+        // FSL: show the one site (Gitee or GitHub) this update is downloaded from
+        Label source = new Label(i18n("update.source", remoteVersion.source()));
         source.setWrapText(true);
         VBox body = new VBox(8, source, scrollPane);
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
