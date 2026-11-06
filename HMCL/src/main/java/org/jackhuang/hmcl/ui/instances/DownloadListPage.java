@@ -96,6 +96,7 @@ public class DownloadListPage extends Control implements DecoratorPage, PageAwar
         externalKeyword.set(null);
         externalKeyword.set(keyword);
     }
+
     private final ObservableList<Node> actions = FXCollections.observableArrayList();
     protected final ListProperty<String> downloadSources = new SimpleListProperty<>(this, "downloadSources", FXCollections.observableArrayList());
     protected final StringProperty downloadSource = new SimpleStringProperty();
