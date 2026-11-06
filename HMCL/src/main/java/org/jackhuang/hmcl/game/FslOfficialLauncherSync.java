@@ -23,8 +23,14 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.jackhuang.hmcl.Metadata;
+import org.jackhuang.hmcl.download.DownloadProvider;
+import org.jackhuang.hmcl.download.game.GameRemoteVersion;
+import org.jackhuang.hmcl.setting.DownloadProviders;
 import org.jackhuang.hmcl.setting.GameDirectoryManager;
+import org.jackhuang.hmcl.task.GetTask;
 import org.jackhuang.hmcl.task.Schedulers;
+import org.jackhuang.hmcl.util.io.FileUtils;
+import org.glavo.url.WebURL;
 import org.jetbrains.annotations.NotNullByDefault;
 
 import java.io.IOException;
@@ -33,6 +39,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -42,8 +49,8 @@ import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
 /// FSL: keeps the official Minecraft Launcher in step with versions installed by FSL.
 ///
-/// When the selected game directory is the official `.minecraft`, every installed version that has
-/// no profile in `launcher_profiles.json` gets a "custom" profile, so it shows up in the official
+/// When the selected game directory is the official `.minecraft`, every installed version (see
+/// [#isInstalled]) that has no profile in `launcher_profiles.json` gets a "custom" profile, so it shows up in the official
 /// launcher's installation list. Existing profiles and all other content of the file are left as
 /// they are, nothing is ever removed, and a one-time backup is written before the first change.
 @NotNullByDefault
@@ -70,7 +77,76 @@ public final class FslOfficialLauncherSync {
             }
             List<String> ids = repository.getDisplayInstances().map(instance -> instance.getId().id()).toList();
             Schedulers.io().execute(() -> sync(base, ids));
+            // FSL: 官方→FSL 反向同步，检测官方启动器已下载但 FSL 缺 json 的版本并自动补全
+            Schedulers.io().execute(() -> syncOfficialVersions(repository, base));
         });
+    }
+
+    /// FSL: 反向同步官方启动器已下载的版本。
+    ///
+    /// 官方启动器只下载 `<id>.jar` 而不写 `<id>.json` 时，[DefaultGameRepository#loadInstanceDirectory]
+    /// 会把该目录识别为无 json 的 jar-only 版本；这里从 Mojang 官方版本清单拉取对应 json 写入
+    /// `versions/<id>/<id>.json`，随后刷新仓库使该版本以完整实例出现。官方启动器删除的版本目录
+    /// 会在仓库刷新时自然消失（refreshRepository 按目录扫描），无需额外清理。
+    ///
+    /// @param repository 当前选中的仓库
+    /// @param base       官方 `.minecraft` 目录
+    static synchronized void syncOfficialVersions(HMCLGameRepository repository, Path base) {
+        Path versionsDir = base.resolve("versions");
+        if (!Files.isDirectory(versionsDir)) {
+            return;
+        }
+
+        List<String> missingJson = new ArrayList<>();
+        try (var stream = Files.list(versionsDir)) {
+            stream.filter(Files::isDirectory).forEach(dir -> {
+                String id = FileUtils.getName(dir);
+                if (Files.isRegularFile(dir.resolve(id + ".jar"))
+                        && !Files.isRegularFile(dir.resolve(id + ".json"))) {
+                    missingJson.add(id);
+                }
+            });
+        } catch (IOException e) {
+            LOG.warning("FSL: failed to scan official versions directory " + versionsDir, e);
+            return;
+        }
+        if (missingJson.isEmpty()) {
+            return;
+        }
+
+        LOG.info("FSL: fetching missing version json for " + missingJson);
+        DownloadProvider provider = DownloadProviders.getDownloadProvider();
+        GameRemoteVersion.fetchAsync(provider)
+                .whenComplete(Schedulers.io(), (list, error) -> {
+                    if (error != null) {
+                        LOG.warning("FSL: failed to fetch Mojang version manifest", error);
+                        return;
+                    }
+                    if (list == null) {
+                        return;
+                    }
+                    boolean wroteAny = false;
+                    for (String id : missingJson) {
+                        GameRemoteVersion remote = list.getRemoteVersion(id);
+                        if (remote == null) {
+                            continue;
+                        }
+                        String url = remote.getUrls().get(0);
+                        try {
+                            String json = new GetTask(WebURL.parse(url)).run();
+                            Path target = versionsDir.resolve(id).resolve(id + ".json");
+                            Files.writeString(target, json, StandardCharsets.UTF_8);
+                            wroteAny = true;
+                            LOG.info("FSL: wrote missing version json for " + id + " -> " + target);
+                        } catch (Exception e) {
+                            LOG.warning("FSL: failed to download json for " + id + " from " + url, e);
+                        }
+                    }
+                    if (wroteAny) {
+                        repository.refreshAsync().start();
+                    }
+                })
+                .start();
     }
 
     /// Adds a profile for each version in `ids` that the official launcher does not list yet.
@@ -107,7 +183,7 @@ public final class FslOfficialLauncherSync {
             String now = Instant.now().toString();
             int added = 0;
             for (String id : ids) {
-                if (listed.contains(id) || !Files.isRegularFile(base.resolve("versions").resolve(id).resolve(id + ".json"))) {
+                if (listed.contains(id) || !isInstalled(base.resolve("versions").resolve(id), id)) {
                     continue;
                 }
                 JsonObject profile = new JsonObject();
@@ -135,6 +211,33 @@ public final class FslOfficialLauncherSync {
             LOG.info("Added " + added + " FSL version(s) to the official launcher profiles");
         } catch (IOException | RuntimeException e) {
             LOG.warning("Failed to sync official launcher profiles in " + file, e);
+        }
+    }
+
+    /// Returns whether the version in `dir` is really installed, not just cached metadata.
+    ///
+    /// On every start the official launcher writes `<id>.json` for the latest release and snapshot,
+    /// without the jar. Turning those into profiles would make an uninstalled version come back, so a
+    /// version counts as installed only when it has its own jar or inherits from another version
+    /// (mod loaders such as Fabric or Forge, which ship no jar of their own).
+    ///
+    /// @param dir the version directory
+    /// @param id  the version ID
+    /// @return `true` if the version has a JSON file and either a jar or an `inheritsFrom` parent
+    static boolean isInstalled(Path dir, String id) {
+        Path json = dir.resolve(id + ".json");
+        if (!Files.isRegularFile(json)) {
+            return false;
+        }
+        if (Files.isRegularFile(dir.resolve(id + ".jar"))) {
+            return true;
+        }
+        try {
+            JsonElement parsed = JsonParser.parseString(Files.readString(json, StandardCharsets.UTF_8));
+            return parsed.isJsonObject() && parsed.getAsJsonObject().has("inheritsFrom");
+        } catch (IOException | RuntimeException e) {
+            // An unreadable version is skipped instead of aborting the whole sync
+            return false;
         }
     }
 }

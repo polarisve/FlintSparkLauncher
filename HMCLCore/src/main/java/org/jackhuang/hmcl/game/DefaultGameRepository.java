@@ -333,6 +333,13 @@ public abstract class DefaultGameRepository implements GameRepository {
         } else {
             List<Path> jsons = FileUtils.listFilesByExtension(dir, "json");
             if (jsons.size() != 1) {
+                // FSL: 官方启动器下载的版本可能只有 jar 而没有 json，仍应识别该版本目录，
+                // 使其显示在列表中；json 缺失由 FslOfficialLauncherSync 自动补全后变为完整实例。
+                Path jar = dir.resolve(id.id() + ".jar");
+                if (Files.isRegularFile(jar)) {
+                    LOG.info("FSL: recognizing official version without json (jar present): " + id);
+                    return createInstance(snapshot, id, new GameInstanceManifest(id), null);
+                }
                 LOG.info("No available json file found, ignoring instance " + id);
                 return null;
             }

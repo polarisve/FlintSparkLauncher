@@ -219,10 +219,12 @@ public final class DefaultGameRepositoryDraft implements GameRepositoryDraft {
                     .toAbsolutePath()
                     .normalize();
             if (!Files.notExists(root)) {
-                throw new FileAlreadyExistsException(root.toString(), null,
-                        "An unregistered instance directory already exists");
+                // FSL: 目录已存在但未注册（如官方启动器残留的 jar-only 版本目录），
+                // 接管该目录而不是抛错，使官方下载的版本可被 FSL 复用/重装。
+                LOG.info("FSL: adopting existing unregistered instance directory " + root);
+            } else {
+                createdIds.add(id);
             }
-            createdIds.add(id);
         }
 
         manifests.put(id, manifest);

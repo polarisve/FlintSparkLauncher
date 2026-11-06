@@ -271,7 +271,7 @@ public class InstallerItem extends Control {
             paneWrapper.pseudoClassStateChanged(CARD, control.style == Style.CARD);
 
             if (control.iconType != null) {
-                var imageContainer = new ImageContainer(32);
+                var imageContainer = new ImageContainer(40);
                 imageContainer.setImage(control.iconType.getIcon());
                 imageContainer.setMouseTransparent(true);
                 imageContainer.getStyleClass().add("installer-item-image");
@@ -300,9 +300,6 @@ public class InstallerItem extends Control {
                 if (state instanceof InstalledState installedState) {
                     if (installedState.incompatibleWithGame) {
                         return i18n("install.installer.change_version", installedState.version);
-                    }
-                    if (installedState.external) {
-                        return i18n("install.installer.external_version", installedState.version);
                     }
                     return i18n("install.installer.version", installedState.version);
                 } else if (state instanceof InstallableState) {
@@ -365,8 +362,9 @@ public class InstallerItem extends Control {
                 if (state instanceof InstallableState) {
                     return true;
                 }
-                if (state instanceof InstalledState) {
-                    return !((InstalledState) state).external;
+                if (state instanceof InstalledState installedState) {
+                    // 游戏本体保持受保护，外部安装的加载器允许更新/更换
+                    return control.type != GameComponentType.GAME || !installedState.external;
                 }
 
                 return false;

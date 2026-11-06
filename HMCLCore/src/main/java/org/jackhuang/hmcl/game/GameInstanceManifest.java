@@ -314,6 +314,27 @@ public record GameInstanceManifest(
         return inheritsFrom == null && patches != null && hasPatch(GameComponentType.GAME);
     }
 
+    /// Returns a modifiable copy of this manifest by folding the standalone metadata into a game
+    /// patch. External versions (e.g. downloaded by the official launcher) are plain standalone
+    /// manifests without a patch list; this adopts them into the managed patch-based format so that
+    /// loaders can be installed or replaced. Inheriting manifests are not adopted.
+    ///
+    /// @param gameVersion the Minecraft version of this instance, used for the generated game patch
+    /// @return a modifiable copy, or this manifest when it is already modifiable or inherits another
+    public GameInstanceManifest asModifiable(@Nullable String gameVersion) {
+        if (isModifiable() || inheritsFrom != null) {
+            return this;
+        }
+
+        GameInstancePatch gamePatch = GameInstancePatch.fromManifest(
+                this,
+                GameComponentType.GAME.getPatchId(),
+                gameVersion,
+                GameInstancePatch.PRIORITY_MC);
+
+        return withRoot(true).withPatches(List.of(gamePatch));
+    }
+
     /// Returns the pending patches.
     ///
     /// @return the pending patches, or an empty list when absent

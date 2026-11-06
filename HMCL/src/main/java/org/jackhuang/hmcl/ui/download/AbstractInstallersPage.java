@@ -25,7 +25,8 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import org.jackhuang.hmcl.download.DownloadProvider;
@@ -167,15 +168,37 @@ public abstract class AbstractInstallersPage extends Control implements WizardPa
 
             {
                 InstallerItem[] components = control.group.getComponents();
+                int count = components.length;
+                // Exactly two filled rows (6 components -> 3+3, 8 -> 4+4).
+                // Larger lists (version pickers) simply fill the row with 4 columns.
+                int columns = count <= 6 ? (count + 1) / 2 : 4;
 
-                FlowPane libraryPane = new FlowPane(16, 16, components);
-                ScrollPane scrollPane = new ScrollPane(libraryPane);
+                GridPane libraryGrid = new GridPane();
+                libraryGrid.setHgap(16);
+                libraryGrid.setVgap(16);
+                for (int i = 0; i < columns; i++) {
+                    ColumnConstraints cc = new ColumnConstraints();
+                    cc.setPercentWidth(100.0 / columns);
+                    cc.setFillWidth(true);
+                    cc.setHgrow(Priority.ALWAYS);
+                    libraryGrid.getColumnConstraints().add(cc);
+                }
+                for (int i = 0; i < count; i++) {
+                    InstallerItem item = components[i];
+                    libraryGrid.add(item, i % columns, i / columns);
+                    GridPane.setHgrow(item, Priority.ALWAYS);
+                    GridPane.setFillWidth(item, true);
+                    // Let the tile stretch to its column instead of its CSS pref width.
+                    item.setMaxWidth(Double.MAX_VALUE);
+                }
+
+                ScrollPane scrollPane = new ScrollPane(libraryGrid);
                 scrollPane.setFitToWidth(true);
                 scrollPane.setFitToHeight(true);
                 BorderPane.setMargin(scrollPane, new Insets(16, 0, 16, 0));
                 root.setCenter(scrollPane);
 
-                if (components.length <= 8)
+                if (count <= 8)
                     scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
             }
 

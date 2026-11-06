@@ -384,6 +384,12 @@ public class DefaultDependencyManager extends AbstractDependencyManager {
         if (!instance.getId().equals(baseManifest.id())) {
             throw new IllegalArgumentException("baseManifest id does not match instance");
         }
+        // External versions are plain standalone manifests without patches; adopt them into the
+        // managed patch-based format so loaders can be installed or replaced. The game component
+        // itself stays protected.
+        if (componentVersion.getComponentType() != GameComponentType.GAME) {
+            baseManifest = baseManifest.asModifiable(instance.getVersion().toString());
+        }
         if (!baseManifest.isModifiable()) {
             throw new IllegalArgumentException("Cannot install component into a non-modifiable manifest");
         }
@@ -431,7 +437,10 @@ public class DefaultDependencyManager extends AbstractDependencyManager {
 
         GameInstanceManifest baseManifest = instance.getManifest();
 
-        if (!baseManifest.isModifiable()) {
+        // 外部版本收编为可管理格式，允许安装本地加载器安装包
+        GameInstanceManifest workingManifest = baseManifest.asModifiable(instance.getVersion().toString());
+
+        if (!workingManifest.isModifiable()) {
             throw new IllegalArgumentException("Cannot install component into a non-modifiable manifest");
         }
 
@@ -439,30 +448,30 @@ public class DefaultDependencyManager extends AbstractDependencyManager {
 
         return Task.composeAsync(() -> {
                     try {
-                        return CleanroomInstallTask.install(this, baseManifest, gameVersion, installer);
+                        return CleanroomInstallTask.install(this, workingManifest, gameVersion, installer);
                     } catch (IOException ignore) {
                     }
 
                     try {
-                        return NeoForgeInstallTask.install(this, baseManifest, gameVersion, installer);
+                        return NeoForgeInstallTask.install(this, workingManifest, gameVersion, installer);
                     } catch (IOException ignore) {
                     }
 
                     try {
-                        return ForgeInstallTask.install(this, baseManifest, gameVersion, installer);
+                        return ForgeInstallTask.install(this, workingManifest, gameVersion, installer);
                     } catch (IOException ignore) {
                     }
 
                     try {
-                        return OptiFineInstallTask.install(this, baseManifest, gameVersion, installer);
+                        return OptiFineInstallTask.install(this, workingManifest, gameVersion, installer);
                     } catch (IOException ignore) {
                     }
 
                     throw new UnsupportedLibraryInstallerException();
                 })
                 .thenApplyAsync(patch -> patch == null
-                        ? baseManifest
-                        : baseManifest.addPatch(patch).reconstructByPatches());
+                        ? workingManifest
+                        : workingManifest.addPatch(patch).reconstructByPatches());
     }
 
     /// Indicates that a local library installer is not recognized by any supported installer.
