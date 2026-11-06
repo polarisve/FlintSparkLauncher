@@ -72,10 +72,11 @@ if (-not $giteeToken) { throw "fsl-secrets.properties 里没有 gitee.token" }
 $cred = "protocol=https`nhost=github.com`n`n" | git credential fill
 $githubToken = ($cred | Where-Object { $_ -like "password=*" }) -replace '^password=', ''
 if (-not $githubToken) { throw "找不到 GitHub 登录，先用 git push 登录一次" }
-# 直连 GitHub 很慢，SakuraCat 代理（127.0.0.1:12450）开着就让 GitHub 走代理
+# 直连 GitHub 很慢，SakuraCat 代理（127.0.0.1:12450）能连上 GitHub 就让 GitHub 走代理
+# 只看端口开着不够：代理有时连 GitHub 会握手失败，所以先真的请求一次 GitHub
 $githubProxy = ""
-$probe = New-Object Net.Sockets.TcpClient
-try { $probe.Connect("127.0.0.1", 12450); $githubProxy = "http://127.0.0.1:12450" } catch { Write-Host "代理 12450 没开，GitHub 直连（可能很慢）" } finally { $probe.Close() }
+$probeCode = curl.exe -s -m 15 -x "http://127.0.0.1:12450" -o NUL -w "%{http_code}" "https://api.github.com/zen"
+if ($probeCode -eq "200") { $githubProxy = "http://127.0.0.1:12450" } else { Write-Host "代理连不上 GitHub（$probeCode），GitHub 改为直连" }
 # 发布是基于 main 打 tag 的，先把代码推到两边
 git push gitee main
 if ($LASTEXITCODE -ne 0) { throw "推送到 Gitee 失败" }
