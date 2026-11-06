@@ -20,26 +20,76 @@ package org.jackhuang.hmcl.upgrade;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import org.glavo.url.WebURL;
 import org.jackhuang.hmcl.task.FileDownloadTask.IntegrityCheck;
+import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.NetworkUtils;
+import org.jackhuang.hmcl.util.versioning.VersionNumber;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+
+import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
 public record RemoteVersion(UpdateChannel channel, String version, List<String> urls, Type type, IntegrityCheck integrityCheck,
                             boolean preview, boolean force, @Nullable String changelog, @Nullable String page) {
 
-    /// Fetches the update JSON from the first source that answers.
+    /// FSL: asks every source (Gitee and GitHub) at the same time on each check.
+    /// The newest version found wins; download URLs from every source that offers
+    /// that same jar are merged, so the download can use either side.
     public static RemoteVersion fetch(UpdateChannel channel, boolean preview, List<String> sources) throws IOException {
+        List<CompletableFuture<RemoteVersion>> futures = sources.stream()
+                .map(source -> CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return parse(channel, preview, NetworkUtils.doGet(source));
+                    } catch (IOException e) {
+                        throw new CompletionException(new IOException("Update source " + source + " failed", e));
+                    }
+                }, Schedulers.io()))
+                .toList();
+
+        List<RemoteVersion> found = new ArrayList<>();
+        IOException failure = null;
+        for (CompletableFuture<RemoteVersion> future : futures) {
+            try {
+                found.add(future.join());
+            } catch (CompletionException e) {
+                Throwable cause = e.getCause() instanceof IOException ? e.getCause() : e;
+                LOG.warning("Failed to check one update source", cause);
+                if (failure == null) failure = new IOException("All update sources failed");
+                failure.addSuppressed(cause);
+            }
+        }
+        if (found.isEmpty()) {
+            throw failure != null ? failure : new IOException("No update source");
+        }
+
+        RemoteVersion newest = found.get(0);
+        for (RemoteVersion v : found) {
+            if (VersionNumber.compare(v.version(), newest.version()) > 0) newest = v;
+        }
+        List<String> urls = new ArrayList<>(newest.urls());
+        for (RemoteVersion v : found) {
+            if (v.version().equals(newest.version()) && v.integrityCheck().equals(newest.integrityCheck())) {
+                for (String u : v.urls()) {
+                    if (!urls.contains(u)) urls.add(u);
+                }
+            }
+        }
+        return new RemoteVersion(newest.channel(), newest.version(), List.copyOf(urls), newest.type(), newest.integrityCheck(),
+                newest.preview(), newest.force(), newest.changelog(), newest.page());
+    }
+
+    private static RemoteVersion parse(UpdateChannel channel, boolean preview, String text) throws IOException {
         try {
-            JsonObject response = JsonUtils.fromNonNullJson(
-                    NetworkUtils.doGet(sources.stream().map(WebURL::parse).toList()), JsonObject.class);
+            JsonObject response = JsonUtils.fromNonNullJson(text, JsonObject.class);
             String version = Optional.ofNullable(response.get("version")).map(JsonElement::getAsString).orElseThrow(() -> new IOException("version is missing"));
             String jarUrl = Optional.ofNullable(response.get("jar")).map(JsonElement::getAsString).orElse(null);
             String jarHash = Optional.ofNullable(response.get("jarsha1")).map(JsonElement::getAsString).orElse(null);
@@ -48,7 +98,7 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
             String changelog = Optional.ofNullable(response.get("changelog")).map(JsonElement::getAsString).orElse(null);
             String page = Optional.ofNullable(response.get("page")).map(JsonElement::getAsString).orElse(null);
             if (jarUrl != null && jarHash != null) {
-                // FSL: "mirrors" lists fallback download URLs for the same jar
+                // FSL: "mirrors" lists other download URLs for the same jar
                 List<String> urls = new ArrayList<>();
                 urls.add(jarUrl);
                 JsonElement mirrors = response.get("mirrors");
@@ -58,11 +108,11 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
                         if (!urls.contains(m)) urls.add(m);
                     }
                 }
-                return new RemoteVersion(channel, version, List.copyOf(urls), Type.JAR, new IntegrityCheck("SHA-1", jarHash), preview, force, changelog, page);
+                return new RemoteVersion(channel, version, List.copyOf(urls), Type.JAR, new IntegrityCheck("SHA-1", jarHash.toLowerCase(Locale.ROOT)), preview, force, changelog, page);
             } else {
                 throw new IOException("No download url is available");
             }
-        } catch (JsonParseException e) {
+        } catch (JsonParseException | IllegalStateException | UnsupportedOperationException e) {
             throw new IOException("Malformed response", e);
         }
     }

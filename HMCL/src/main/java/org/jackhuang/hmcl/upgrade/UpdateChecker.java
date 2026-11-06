@@ -99,7 +99,7 @@ public final class UpdateChecker {
         query.put("version", Metadata.VERSION);
         query.put("channel", preview ? channel.channelName + "-preview" : channel.channelName);
 
-        // FSL: try Gitee first, then GitHub
+        // FSL: Gitee and GitHub are both checked at the same time
         List<String> urls = Metadata.UPDATE_URLS.stream().map(u -> NetworkUtils.withQuery(u, query)).toList();
         return RemoteVersion.fetch(channel, preview, urls);
     }

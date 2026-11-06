@@ -49,13 +49,13 @@ public final class Metadata {
     public static final int MINIMUM_SUPPORTED_JAVA_VERSION = 17;
     public static final int RECOMMENDED_JAVA_VERSION = 21;
 
-    // FSL: Gitee is fast in mainland China, GitHub is the fallback
+    // FSL: releases are published on both Gitee and GitHub
     public static final String PUBLISH_URL = "https://gitee.com/polarisve/FlintSparkLauncher/releases";
     public static final String GITHUB_PUBLISH_URL = "https://github.com/polarisve/FlintSparkLauncher/releases";
     public static final String DOWNLOAD_URL = PUBLISH_URL;
     public static final String HMCL_UPDATE_URL = System.getProperty("hmcl.update_source.override",
             "https://gitee.com/polarisve/FlintSparkLauncher/releases/download/latest/update.json");
-    /// Update sources tried in order; an override replaces all of them.
+    /// Update sources checked together on every update check; an override replaces all of them.
     public static final List<String> UPDATE_URLS = System.getProperty("hmcl.update_source.override") != null
             ? List.of(HMCL_UPDATE_URL)
             : List.of(HMCL_UPDATE_URL, GITHUB_PUBLISH_URL + "/latest/download/update.json");

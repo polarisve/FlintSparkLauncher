@@ -25,44 +25,65 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/// Verifies that update sources fall back in order and that jar mirrors are parsed.
+/// Verifies that every update source is checked together and the results are merged.
 class RemoteVersionTest {
 
-    private static final String JSON = """
-            {
-              "version": "9.9",
-              "jar": "https://gitee.example/FSL-9.9.jar",
-              "mirrors": ["https://github.example/FSL-9.9.jar", "https://gitee.example/FSL-9.9.jar"],
-              "jarsha1": "0123456789abcdef0123456789abcdef01234567",
-              "changelog": "中文说明"
-            }
-            """;
+    private static final String SHA1 = "0123456789abcdef0123456789abcdef01234567";
 
-    @Test
-    void fallsBackToSecondSourceAndParsesMirrors(@TempDir Path dir) throws IOException {
-        Path json = dir.resolve("update.json");
-        Files.writeString(json, JSON, StandardCharsets.UTF_8);
-        String missing = dir.resolve("missing.json").toUri().toString();
-
-        RemoteVersion v = RemoteVersion.fetch(UpdateChannel.STABLE, false, List.of(missing, json.toUri().toString()));
-
-        assertEquals("9.9", v.version());
-        // primary first, mirror second, duplicates removed
-        assertEquals(List.of("https://gitee.example/FSL-9.9.jar", "https://github.example/FSL-9.9.jar"), v.urls());
-        assertEquals("中文说明", v.changelog());
+    /// Writes an update.json shaped like the one release.ps1 produces.
+    private static String source(Path dir, String name, String version, String jar, String mirror, String sha1) throws IOException {
+        String mirrors = mirror == null ? "" : "\"mirrors\": [\"" + mirror + "\"],";
+        Path file = dir.resolve(name);
+        Files.writeString(file, """
+                {
+                  "version": "%s",
+                  "jar": "%s",
+                  %s
+                  "jarsha1": "%s",
+                  "changelog": "中文说明 %s"
+                }
+                """.formatted(version, jar, mirrors, sha1, version), StandardCharsets.UTF_8);
+        return file.toUri().toString();
     }
 
     @Test
-    void worksWithoutMirrors(@TempDir Path dir) throws IOException {
-        Path json = dir.resolve("update.json");
-        Files.writeString(json, JSON.replaceAll("(?m)^.*\"mirrors\".*\\R", ""), StandardCharsets.UTF_8);
+    void mergesDownloadUrlsFromBothSources(@TempDir Path dir) throws IOException {
+        String gitee = source(dir, "gitee.json", "9.9", "https://gitee.example/FSL-9.9.jar", "https://github.example/FSL-9.9.jar", SHA1);
+        String github = source(dir, "github.json", "9.9", "https://github.example/FSL-9.9.jar", null, SHA1.toUpperCase(Locale.ROOT));
 
-        RemoteVersion v = RemoteVersion.fetch(UpdateChannel.STABLE, false, List.of(json.toUri().toString()));
+        RemoteVersion v = RemoteVersion.fetch(UpdateChannel.STABLE, false, List.of(gitee, github));
 
-        assertEquals(List.of("https://gitee.example/FSL-9.9.jar"), v.urls());
+        assertEquals("9.9", v.version());
+        assertEquals(List.of("https://gitee.example/FSL-9.9.jar", "https://github.example/FSL-9.9.jar"), v.urls());
+        assertEquals("中文说明 9.9", v.changelog());
+    }
+
+    @Test
+    void picksTheNewestVersionWhicheverSourceHasIt(@TempDir Path dir) throws IOException {
+        // e.g. GitHub already has 2.0 while Gitee still serves 1.9
+        String gitee = source(dir, "gitee.json", "1.9", "https://gitee.example/FSL-1.9.jar", null, SHA1);
+        String github = source(dir, "github.json", "2.0", "https://github.example/FSL-2.0.jar", null, "ffffffffffffffffffffffffffffffffffffffff");
+
+        RemoteVersion v = RemoteVersion.fetch(UpdateChannel.STABLE, false, List.of(gitee, github));
+
+        assertEquals("2.0", v.version());
+        // the old jar from Gitee must not be mixed into the 2.0 download
+        assertEquals(List.of("https://github.example/FSL-2.0.jar"), v.urls());
+    }
+
+    @Test
+    void stillWorksWhenOneSourceFails(@TempDir Path dir) throws IOException {
+        String broken = dir.resolve("missing.json").toUri().toString();
+        String github = source(dir, "github.json", "9.9", "https://github.example/FSL-9.9.jar", null, SHA1);
+
+        RemoteVersion v = RemoteVersion.fetch(UpdateChannel.STABLE, false, List.of(broken, github));
+
+        assertEquals("9.9", v.version());
+        assertEquals(List.of("https://github.example/FSL-9.9.jar"), v.urls());
     }
 
     @Test
