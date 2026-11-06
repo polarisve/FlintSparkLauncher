@@ -394,7 +394,8 @@
 .installer-item-wrapper {
     -fx-background-color: -monet-surface;
     -fx-background-radius: 4;
-    -fx-pref-width: 180px;
+    -fx-min-width: 180px;
+    -fx-pref-width: 220px;
 }
 
 .installer-item-wrapper:card {
