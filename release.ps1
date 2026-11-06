@@ -1,5 +1,5 @@
 ﻿# FSL 一键发版：改版本号 -> 编译并签名 -> 生成 update.json -> 发布到 Gitee 和 GitHub Releases
-# 启动器优先从 Gitee 检查和下载更新，Gitee 不通再用 GitHub
+# 两边同时上传；启动器优先从 Gitee 检查和下载更新，Gitee 不通再用 GitHub
 # 用法（在 FSL 目录里）:
 #   powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.1 -Notes "修复了xxx`n新增了xxx"
 # GitHub 用 git 保存的登录（不需要 gh）；Gitee 用 fsl-secrets.properties 里的 gitee.token
@@ -64,48 +64,81 @@ Write-Host "已生成 $out"
 
 if ($NoUpload) { Write-Host "没有上传（-NoUpload）"; exit 0 }
 
-# 4. 先发 Gitee（国内用户主要从这里更新）
+# 4. Gitee 和 GitHub 同时发布（两个后台任务并行上传，不分先后）
 $secrets = Get-Content (Join-Path $root "fsl-secrets.properties") -Encoding UTF8
 $giteeToken = (($secrets | Where-Object { $_ -like "gitee.token=*" }) -replace '^gitee\.token=', '').Trim()
 if (-not $giteeToken) { throw "fsl-secrets.properties 里没有 gitee.token" }
-# 先把代码和 tag 推到 Gitee，发布要基于这个 tag
+# GitHub 用 git 保存的登录（gh 在这台电脑上连 API 会断）
+$cred = "protocol=https`nhost=github.com`n`n" | git credential fill
+$githubToken = ($cred | Where-Object { $_ -like "password=*" }) -replace '^password=', ''
+if (-not $githubToken) { throw "找不到 GitHub 登录，先用 git push 登录一次" }
+# 发布是基于 main 打 tag 的，先把代码推到 Gitee
 git push gitee main
 if ($LASTEXITCODE -ne 0) { throw "推送到 Gitee 失败" }
-$giteeApi = "https://gitee.com/api/v5/repos/$repo"
-$giteeBodyFile = Join-Path $out "gitee-body.json"
-$giteeBody = [ordered]@{ access_token = $giteeToken; tag_name = $tag; target_commitish = "main"; name = "FSL $Version"; body = $update.changelog; prerelease = $false }
-[IO.File]::WriteAllText($giteeBodyFile, ($giteeBody | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
-$giteeRel = curl.exe -s -m 60 -X POST -H "Content-Type: application/json;charset=UTF-8" --data-binary "@$giteeBodyFile" "$giteeApi/releases" | ConvertFrom-Json
-Remove-Item $giteeBodyFile
-if (-not $giteeRel.id) { throw "Gitee 创建发布失败：$($giteeRel.message)（版本 $tag 可能已经发过了）" }
-foreach ($name in @("FSL-$Version.jar", "update.json", "FSL-$Version.exe")) {
-    $file = Join-Path $out $name
-    $asset = curl.exe -s -m 1800 -X POST -F "access_token=$giteeToken" -F "file=@$file" "$giteeApi/releases/$($giteeRel.id)/attach_files" | ConvertFrom-Json
-    if ($asset.name -ne $name) { throw "Gitee 上传 $name 失败：$($asset.message)" }
-    Write-Host "Gitee 已上传 $name"
+
+# 两边共用的参数；curl 结果写进文件再按 UTF-8 读，避免后台任务里中文乱码
+$jobArgs = @($repo, $tag, $Version, $out, $update.changelog)
+
+$giteeJob = Start-Job -Name "Gitee" -ArgumentList ($jobArgs + $giteeToken) -ScriptBlock {
+    param($repo, $tag, $Version, $out, $changelog, $token)
+    $ErrorActionPreference = "Stop"
+    function Read-Json($f) { $j = Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json; Remove-Item $f; $j }
+    $api = "https://gitee.com/api/v5/repos/$repo"
+    $bodyFile = Join-Path $out "gitee-body.json"
+    $resp = Join-Path $out "gitee-resp.json"
+    $body = [ordered]@{ access_token = $token; tag_name = $tag; target_commitish = "main"; name = "FSL $Version"; body = $changelog; prerelease = $false }
+    [IO.File]::WriteAllText($bodyFile, ($body | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
+    curl.exe -s -m 60 -o $resp -X POST -H "Content-Type: application/json;charset=UTF-8" --data-binary "@$bodyFile" "$api/releases"
+    Remove-Item $bodyFile
+    $rel = Read-Json $resp
+    if (-not $rel.id) { throw "Gitee 创建发布失败：$($rel.message)（版本 $tag 可能已经发过了）" }
+    foreach ($name in @("FSL-$Version.jar", "update.json", "FSL-$Version.exe")) {
+        $file = Join-Path $out $name
+        curl.exe -s -m 1800 -o $resp -X POST -F "access_token=$token" -F "file=@$file" "$api/releases/$($rel.id)/attach_files"
+        $asset = Read-Json $resp
+        if ($asset.name -ne $name) { throw "Gitee 上传 $name 失败：$($asset.message)" }
+        "Gitee 已上传 $name"
+    }
+    "Gitee 发布完成：https://gitee.com/$repo/releases/tag/$tag"
 }
-Write-Host "Gitee 发布完成：https://gitee.com/$repo/releases/tag/$tag"
 
-# 5. 再发 GitHub Releases，并标为最新版本（Gitee 不通时的备用源）
-# 用 Windows 自带的 curl.exe 和 git 保存的 GitHub 登录（gh 在这台电脑上连 API 会断）
-$cred = "protocol=https`nhost=github.com`n`n" | git credential fill
-$token = ($cred | Where-Object { $_ -like "password=*" }) -replace '^password=', ''
-if (-not $token) { throw "找不到 GitHub 登录，先用 git push 登录一次" }
-$api = "https://api.github.com/repos/$repo"
-$auth = "Authorization: Bearer $token"
-
-$bodyFile = Join-Path $out "body.json"
-$body = [ordered]@{ tag_name = $tag; target_commitish = "main"; name = "FSL $Version"; body = $update.changelog; make_latest = "true" }
-[IO.File]::WriteAllText($bodyFile, ($body | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
-$created = curl.exe -s -m 60 -X POST -H $auth -H "Content-Type: application/json" --data-binary "@$bodyFile" "$api/releases" | ConvertFrom-Json
-Remove-Item $bodyFile
-if (-not $created.id) { throw "创建发布失败：$($created.message)（版本 $tag 可能已经发过了）" }
-
-foreach ($name in @("FSL-$Version.exe", "FSL-$Version.jar", "update.json")) {
-    $file = Join-Path $out $name
-    $asset = curl.exe -s -m 900 -X POST -H $auth -H "Content-Type: application/octet-stream" --data-binary "@$file" `
-        "https://uploads.github.com/repos/$repo/releases/$($created.id)/assets?name=$name" | ConvertFrom-Json
-    if ($asset.state -ne "uploaded") { throw "上传 $name 失败：$($asset.message)" }
-    Write-Host "GitHub 已上传 $name"
+$githubJob = Start-Job -Name "GitHub" -ArgumentList ($jobArgs + $githubToken) -ScriptBlock {
+    param($repo, $tag, $Version, $out, $changelog, $token)
+    $ErrorActionPreference = "Stop"
+    function Read-Json($f) { $j = Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json; Remove-Item $f; $j }
+    $api = "https://api.github.com/repos/$repo"
+    $auth = "Authorization: Bearer $token"
+    $bodyFile = Join-Path $out "github-body.json"
+    $resp = Join-Path $out "github-resp.json"
+    $body = [ordered]@{ tag_name = $tag; target_commitish = "main"; name = "FSL $Version"; body = $changelog; make_latest = "true" }
+    [IO.File]::WriteAllText($bodyFile, ($body | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
+    curl.exe -s -m 60 -o $resp -X POST -H $auth -H "Content-Type: application/json" --data-binary "@$bodyFile" "$api/releases"
+    Remove-Item $bodyFile
+    $rel = Read-Json $resp
+    if (-not $rel.id) { throw "GitHub 创建发布失败：$($rel.message)（版本 $tag 可能已经发过了）" }
+    foreach ($name in @("FSL-$Version.jar", "update.json", "FSL-$Version.exe")) {
+        $file = Join-Path $out $name
+        curl.exe -s -m 1800 -o $resp -X POST -H $auth -H "Content-Type: application/octet-stream" --data-binary "@$file" `
+            "https://uploads.github.com/repos/$repo/releases/$($rel.id)/assets?name=$name"
+        $asset = Read-Json $resp
+        if ($asset.state -ne "uploaded") { throw "GitHub 上传 $name 失败：$($asset.message)" }
+        "GitHub 已上传 $name"
+    }
+    "GitHub 发布完成：https://github.com/$repo/releases/tag/$tag"
 }
-Write-Host "GitHub 发布完成：https://github.com/$repo/releases/tag/$tag"
+
+Write-Host "Gitee 和 GitHub 正在同时上传……"
+Wait-Job $giteeJob, $githubJob | Out-Null
+$failed = @()
+foreach ($job in @($giteeJob, $githubJob)) {
+    Receive-Job $job -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+    if ($job.State -ne "Completed") {
+        $reason = $job.ChildJobs[0].JobStateInfo.Reason
+        Write-Host "$($job.Name) 失败：$($reason.Message)" -ForegroundColor Red
+        $failed += $job.Name
+    }
+    Remove-Job $job
+}
+# 两边都发成功才算发完；有一边失败要修好补发
+if ($failed) { throw "没有发完：$($failed -join '、') 失败，两边都成功才算发布完成" }
+Write-Host "两边都发布完成"
