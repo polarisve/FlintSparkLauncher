@@ -34,7 +34,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.net.http.HttpHeaders;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -174,7 +173,9 @@ public final class DefaultGameRepositoryDraftTest {
 
     /// Refuses to claim and later delete an unregistered directory that predates the draft.
     @Test
-    public void testPutRejectsPreexistingUnregisteredDirectory(@TempDir Path tempDirectory) throws IOException {
+    /// FSL: an unregistered directory (e.g. a jar-only version left by the official launcher) is adopted,
+    /// and an aborted draft must not delete the files that were already there.
+    public void testPutAdoptsPreexistingUnregisteredDirectory(@TempDir Path tempDirectory) throws IOException {
         TestRepository repository = new TestRepository(tempDirectory);
         GameInstanceID id = new GameInstanceID("instance");
         Path root = repository.getLayout().getInstanceRoot(id);
@@ -183,7 +184,7 @@ public final class DefaultGameRepositoryDraftTest {
         Files.writeString(retained, "content");
 
         try (DefaultGameRepositoryDraft draft = repository.openDraft()) {
-            assertThrows(FileAlreadyExistsException.class, () -> draft.put(new GameInstanceManifest(id)));
+            draft.put(new GameInstanceManifest(id));
         }
 
         assertTrue(Files.exists(retained));
