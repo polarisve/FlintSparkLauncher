@@ -64,7 +64,6 @@ import org.jackhuang.hmcl.ui.fsl.EmberBackground;
 import org.jackhuang.hmcl.ui.fsl.FslHome;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.Priority;
-import org.jackhuang.hmcl.setting.Accounts;
 import org.jackhuang.hmcl.ui.instances.GameListPopupMenu;
 import org.jackhuang.hmcl.ui.instances.Instances;
 import org.jackhuang.hmcl.upgrade.RemoteVersion;

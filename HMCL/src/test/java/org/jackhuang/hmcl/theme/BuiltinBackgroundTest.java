@@ -21,6 +21,7 @@ import javafx.scene.image.Image;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
@@ -36,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public final class BuiltinBackgroundTest {
     /// Checks precomputed MonetFX seed colors against dynamic extraction.
     @Test
+    @Disabled("FSL uses its own purple theme colors instead of the ones extracted from the wallpapers")
     public void precomputedThemeColorsMatchDynamicExtraction() {
         List<Executable> checks = Arrays.stream(BuiltinBackground.values())
                 .<Executable>map(background -> () -> assertEquals(
