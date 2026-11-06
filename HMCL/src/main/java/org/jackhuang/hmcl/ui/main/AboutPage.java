@@ -64,10 +64,11 @@ public final class AboutPage extends SpinnerPane {
             basedOn.setTitle(i18n("about.based_on"));
             basedOn.setSubtitle(i18n("about.based_on.statement"));
 
-            var author = LineButton.createExternalLinkButton("https://space.bilibili.com/1445341");
+            // FSL author; the HMCL credit stays in "based on" and the copyright line above/below
+            var author = LineButton.createExternalLinkButton("https://space.bilibili.com/3461572603153028");
             author.setLargeTitle(true);
-            author.setLeading(FXUtils.newBuiltinImage("/assets/img/yellow_fish.png"));
-            author.setTitle("huanghongxun");
+            author.setLeading(FXUtils.newBuiltinImage("/assets/img/polarisve.png"));
+            author.setTitle("polarisve");
             author.setSubtitle(i18n("about.author.statement"));
 
             about.getContent().setAll(launcher, basedOn, author);
