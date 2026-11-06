@@ -26,6 +26,7 @@ import org.jetbrains.annotations.Nullable;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumSet;
+import java.util.List;
 
 /**
  * Stores metadata about this application.
@@ -48,10 +49,16 @@ public final class Metadata {
     public static final int MINIMUM_SUPPORTED_JAVA_VERSION = 17;
     public static final int RECOMMENDED_JAVA_VERSION = 21;
 
-    public static final String PUBLISH_URL = "https://github.com/polarisve/FlintSparkLauncher/releases";
+    // FSL: Gitee is fast in mainland China, GitHub is the fallback
+    public static final String PUBLISH_URL = "https://gitee.com/polarisve/FlintSparkLauncher/releases";
+    public static final String GITHUB_PUBLISH_URL = "https://github.com/polarisve/FlintSparkLauncher/releases";
     public static final String DOWNLOAD_URL = PUBLISH_URL;
     public static final String HMCL_UPDATE_URL = System.getProperty("hmcl.update_source.override",
-            "https://github.com/polarisve/FlintSparkLauncher/releases/latest/download/update.json");
+            "https://gitee.com/polarisve/FlintSparkLauncher/releases/download/latest/update.json");
+    /// Update sources tried in order; an override replaces all of them.
+    public static final List<String> UPDATE_URLS = System.getProperty("hmcl.update_source.override") != null
+            ? List.of(HMCL_UPDATE_URL)
+            : List.of(HMCL_UPDATE_URL, GITHUB_PUBLISH_URL + "/latest/download/update.json");
     public static final String MANUAL_UPDATE_URL = PUBLISH_URL;
 
     public static final String DOCS_URL = "https://docs.hmcl.net";

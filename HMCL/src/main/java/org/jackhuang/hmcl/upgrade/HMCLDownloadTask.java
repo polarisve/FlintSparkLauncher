@@ -17,6 +17,7 @@
  */
 package org.jackhuang.hmcl.upgrade;
 
+import org.glavo.url.WebURL;
 import org.jackhuang.hmcl.task.FileDownloadTask;
 
 import java.nio.file.Files;
@@ -27,7 +28,7 @@ final class HMCLDownloadTask extends FileDownloadTask {
     private final RemoteVersion.Type archiveFormat;
 
     public HMCLDownloadTask(RemoteVersion version, Path target) {
-        super(version.url(), target, version.integrityCheck());
+        super(version.urls().stream().map(WebURL::parse).toList(), target, version.integrityCheck());
         archiveFormat = version.type();
     }
 

@@ -29,6 +29,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.List;
 
 import static org.jackhuang.hmcl.setting.SettingsManager.settings;
 import static org.jackhuang.hmcl.util.Lang.*;
@@ -98,8 +99,9 @@ public final class UpdateChecker {
         query.put("version", Metadata.VERSION);
         query.put("channel", preview ? channel.channelName + "-preview" : channel.channelName);
 
-        String url = NetworkUtils.withQuery(Metadata.HMCL_UPDATE_URL, query);
-        return RemoteVersion.fetch(channel, preview, url);
+        // FSL: try Gitee first, then GitHub
+        List<String> urls = Metadata.UPDATE_URLS.stream().map(u -> NetworkUtils.withQuery(u, query)).toList();
+        return RemoteVersion.fetch(channel, preview, urls);
     }
 
     private static boolean isDevelopmentVersion(String version) {

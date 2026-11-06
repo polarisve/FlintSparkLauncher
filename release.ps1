@@ -1,7 +1,8 @@
-﻿# FSL 一键发版：改版本号 -> 编译并签名 -> 生成 update.json -> 发布到 GitHub Releases
+﻿# FSL 一键发版：改版本号 -> 编译并签名 -> 生成 update.json -> 发布到 Gitee 和 GitHub Releases
+# 启动器优先从 Gitee 检查和下载更新，Gitee 不通再用 GitHub
 # 用法（在 FSL 目录里）:
 #   powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.1 -Notes "修复了xxx`n新增了xxx"
-# 用的是 git 保存的 GitHub 登录，不需要 gh
+# GitHub 用 git 保存的登录（不需要 gh）；Gitee 用 fsl-secrets.properties 里的 gitee.token
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [string]$Notes = "",
@@ -47,11 +48,12 @@ $sha = [Security.Cryptography.SHA1]::Create()
 $sha1 = -join ($sha.ComputeHash([IO.File]::ReadAllBytes($jar)) | ForEach-Object { $_.ToString("x2") })
 $update = [ordered]@{
     version   = $Version
-    jar       = "https://github.com/$repo/releases/download/$tag/FSL-$Version.jar"
+    jar       = "https://gitee.com/$repo/releases/download/$tag/FSL-$Version.jar"
+    mirrors   = @("https://github.com/$repo/releases/download/$tag/FSL-$Version.jar")
     jarsha1   = $sha1
     force     = [bool]$Force
     changelog = ($Notes -replace '`n', "`n")
-    page      = "https://github.com/$repo/releases/tag/$tag"
+    page      = "https://gitee.com/$repo/releases/tag/$tag"
 }
 $out = Join-Path $root "HMCL\build\release"
 New-Item -ItemType Directory -Force $out | Out-Null
@@ -62,7 +64,29 @@ Write-Host "已生成 $out"
 
 if ($NoUpload) { Write-Host "没有上传（-NoUpload）"; exit 0 }
 
-# 4. 上传到 GitHub Releases，并标为最新版本
+# 4. 先发 Gitee（国内用户主要从这里更新）
+$secrets = Get-Content (Join-Path $root "fsl-secrets.properties") -Encoding UTF8
+$giteeToken = (($secrets | Where-Object { $_ -like "gitee.token=*" }) -replace '^gitee\.token=', '').Trim()
+if (-not $giteeToken) { throw "fsl-secrets.properties 里没有 gitee.token" }
+# 先把代码和 tag 推到 Gitee，发布要基于这个 tag
+git push gitee main
+if ($LASTEXITCODE -ne 0) { throw "推送到 Gitee 失败" }
+$giteeApi = "https://gitee.com/api/v5/repos/$repo"
+$giteeBodyFile = Join-Path $out "gitee-body.json"
+$giteeBody = [ordered]@{ access_token = $giteeToken; tag_name = $tag; target_commitish = "main"; name = "FSL $Version"; body = $update.changelog; prerelease = $false }
+[IO.File]::WriteAllText($giteeBodyFile, ($giteeBody | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
+$giteeRel = curl.exe -s -m 60 -X POST -H "Content-Type: application/json;charset=UTF-8" --data-binary "@$giteeBodyFile" "$giteeApi/releases" | ConvertFrom-Json
+Remove-Item $giteeBodyFile
+if (-not $giteeRel.id) { throw "Gitee 创建发布失败：$($giteeRel.message)（版本 $tag 可能已经发过了）" }
+foreach ($name in @("FSL-$Version.jar", "update.json", "FSL-$Version.exe")) {
+    $file = Join-Path $out $name
+    $asset = curl.exe -s -m 1800 -X POST -F "access_token=$giteeToken" -F "file=@$file" "$giteeApi/releases/$($giteeRel.id)/attach_files" | ConvertFrom-Json
+    if ($asset.name -ne $name) { throw "Gitee 上传 $name 失败：$($asset.message)" }
+    Write-Host "Gitee 已上传 $name"
+}
+Write-Host "Gitee 发布完成：https://gitee.com/$repo/releases/tag/$tag"
+
+# 5. 再发 GitHub Releases，并标为最新版本（Gitee 不通时的备用源）
 # 用 Windows 自带的 curl.exe 和 git 保存的 GitHub 登录（gh 在这台电脑上连 API 会断）
 $cred = "protocol=https`nhost=github.com`n`n" | git credential fill
 $token = ($cred | Where-Object { $_ -like "password=*" }) -replace '^password=', ''
@@ -82,6 +106,6 @@ foreach ($name in @("FSL-$Version.exe", "FSL-$Version.jar", "update.json")) {
     $asset = curl.exe -s -m 900 -X POST -H $auth -H "Content-Type: application/octet-stream" --data-binary "@$file" `
         "https://uploads.github.com/repos/$repo/releases/$($created.id)/assets?name=$name" | ConvertFrom-Json
     if ($asset.state -ne "uploaded") { throw "上传 $name 失败：$($asset.message)" }
-    Write-Host "已上传 $name"
+    Write-Host "GitHub 已上传 $name"
 }
-Write-Host "发布完成：https://github.com/$repo/releases/tag/$tag"
+Write-Host "GitHub 发布完成：https://github.com/$repo/releases/tag/$tag"
