@@ -22,6 +22,8 @@ import com.jfoenix.controls.JFXDialogLayout;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
 
 import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
@@ -51,7 +53,13 @@ public final class UpgradeDialog extends JFXDialogLayout {
         ScrollPane scrollPane = new ScrollPane(notes);
         scrollPane.setFitToWidth(true);
         FXUtils.smoothScrolling(scrollPane);
-        setBody(scrollPane);
+
+        // FSL: show which sites (Gitee / GitHub) offer this update
+        Label source = new Label(i18n("update.source", String.join(i18n("update.source.separator"), remoteVersion.sources())));
+        source.setWrapText(true);
+        VBox body = new VBox(8, source, scrollPane);
+        VBox.setVgrow(scrollPane, Priority.ALWAYS);
+        setBody(body);
 
         JFXHyperlink openInBrowser = new JFXHyperlink(i18n("web.view_in_browser"));
         openInBrowser.setExternalLink(url);

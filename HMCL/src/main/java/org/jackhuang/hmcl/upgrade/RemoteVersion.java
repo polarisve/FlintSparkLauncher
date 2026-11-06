@@ -29,9 +29,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -39,7 +41,8 @@ import java.util.concurrent.CompletionException;
 import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
 public record RemoteVersion(UpdateChannel channel, String version, List<String> urls, Type type, IntegrityCheck integrityCheck,
-                            boolean preview, boolean force, @Nullable String changelog, @Nullable String page) {
+                            boolean preview, boolean force, @Nullable String changelog, @Nullable String page,
+                            List<String> sources) {
 
     /// FSL: asks every source (Gitee and GitHub) at the same time on each check.
     /// The newest version found wins; download URLs from every source that offers
@@ -48,7 +51,7 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
         List<CompletableFuture<RemoteVersion>> futures = sources.stream()
                 .map(source -> CompletableFuture.supplyAsync(() -> {
                     try {
-                        return parse(channel, preview, NetworkUtils.doGet(source));
+                        return parse(channel, preview, NetworkUtils.doGet(source), sourceName(source));
                     } catch (IOException e) {
                         throw new CompletionException(new IOException("Update source " + source + " failed", e));
                     }
@@ -76,18 +79,37 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
             if (VersionNumber.compare(v.version(), newest.version()) > 0) newest = v;
         }
         List<String> urls = new ArrayList<>(newest.urls());
+        // FSL: every source offering this same jar, shown as "update source" in the update dialog
+        List<String> names = new ArrayList<>();
         for (RemoteVersion v : found) {
             if (v.version().equals(newest.version()) && v.integrityCheck().equals(newest.integrityCheck())) {
                 for (String u : v.urls()) {
                     if (!urls.contains(u)) urls.add(u);
                 }
+                for (String n : v.sources()) {
+                    if (!names.contains(n)) names.add(n);
+                }
             }
         }
         return new RemoteVersion(newest.channel(), newest.version(), List.copyOf(urls), newest.type(), newest.integrityCheck(),
-                newest.preview(), newest.force(), newest.changelog(), newest.page());
+                newest.preview(), newest.force(), newest.changelog(), newest.page(), List.copyOf(names));
     }
 
-    private static RemoteVersion parse(UpdateChannel channel, boolean preview, String text) throws IOException {
+    /// Readable name of an update source: "Gitee", "GitHub", or the host.
+    static String sourceName(String url) {
+        String host;
+        try {
+            host = Objects.requireNonNullElse(URI.create(url).getHost(), "");
+        } catch (IllegalArgumentException e) {
+            host = "";
+        }
+        String lower = host.toLowerCase(Locale.ROOT);
+        if (lower.equals("gitee.com") || lower.endsWith(".gitee.com")) return "Gitee";
+        if (lower.equals("github.com") || lower.endsWith(".github.com")) return "GitHub";
+        return host.isEmpty() ? url : host;
+    }
+
+    private static RemoteVersion parse(UpdateChannel channel, boolean preview, String text, String source) throws IOException {
         try {
             JsonObject response = JsonUtils.fromNonNullJson(text, JsonObject.class);
             String version = Optional.ofNullable(response.get("version")).map(JsonElement::getAsString).orElseThrow(() -> new IOException("version is missing"));
@@ -108,7 +130,7 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
                         if (!urls.contains(m)) urls.add(m);
                     }
                 }
-                return new RemoteVersion(channel, version, List.copyOf(urls), Type.JAR, new IntegrityCheck("SHA-1", jarHash.toLowerCase(Locale.ROOT)), preview, force, changelog, page);
+                return new RemoteVersion(channel, version, List.copyOf(urls), Type.JAR, new IntegrityCheck("SHA-1", jarHash.toLowerCase(Locale.ROOT)), preview, force, changelog, page, List.of(source));
             } else {
                 throw new IOException("No download url is available");
             }
@@ -119,7 +141,7 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
 
     @Override
     public @NotNull String toString() {
-        return "[" + version + " from " + urls + "]";
+        return "[" + version + " from " + sources + ", " + urls + "]";
     }
 
     public enum Type {

@@ -60,6 +60,15 @@ class RemoteVersionTest {
         assertEquals("9.9", v.version());
         assertEquals(List.of("https://gitee.example/FSL-9.9.jar", "https://github.example/FSL-9.9.jar"), v.urls());
         assertEquals("中文说明 9.9", v.changelog());
+        // both sources offer the same jar, so both are listed as update sources
+        assertEquals(2, v.sources().size());
+    }
+
+    @Test
+    void namesGiteeAndGitHubSources() {
+        assertEquals("Gitee", RemoteVersion.sourceName("https://gitee.com/polarisve/FlintSparkLauncher/releases/download/latest/update.json?version=1.2"));
+        assertEquals("GitHub", RemoteVersion.sourceName("https://github.com/polarisve/FlintSparkLauncher/releases/latest/download/update.json"));
+        assertEquals("example.com", RemoteVersion.sourceName("https://example.com/update.json"));
     }
 
     @Test
@@ -73,6 +82,8 @@ class RemoteVersionTest {
         assertEquals("2.0", v.version());
         // the old jar from Gitee must not be mixed into the 2.0 download
         assertEquals(List.of("https://github.example/FSL-2.0.jar"), v.urls());
+        // only the source that has 2.0 is shown
+        assertEquals(List.of(RemoteVersion.sourceName(github)), v.sources());
     }
 
     @Test
