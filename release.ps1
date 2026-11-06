@@ -72,9 +72,15 @@ if (-not $giteeToken) { throw "fsl-secrets.properties 里没有 gitee.token" }
 $cred = "protocol=https`nhost=github.com`n`n" | git credential fill
 $githubToken = ($cred | Where-Object { $_ -like "password=*" }) -replace '^password=', ''
 if (-not $githubToken) { throw "找不到 GitHub 登录，先用 git push 登录一次" }
-# 发布是基于 main 打 tag 的，先把代码推到 Gitee
+# 直连 GitHub 很慢，SakuraCat 代理（127.0.0.1:12450）开着就让 GitHub 走代理
+$githubProxy = ""
+$probe = New-Object Net.Sockets.TcpClient
+try { $probe.Connect("127.0.0.1", 12450); $githubProxy = "http://127.0.0.1:12450" } catch { Write-Host "代理 12450 没开，GitHub 直连（可能很慢）" } finally { $probe.Close() }
+# 发布是基于 main 打 tag 的，先把代码推到两边
 git push gitee main
 if ($LASTEXITCODE -ne 0) { throw "推送到 Gitee 失败" }
+if ($githubProxy) { git -c http.proxy=$githubProxy push origin main } else { git push origin main }
+if ($LASTEXITCODE -ne 0) { throw "推送到 GitHub 失败" }
 
 # 两边共用的参数；curl 结果写进文件再按 UTF-8 读，避免后台任务里中文乱码
 $jobArgs = @($repo, $tag, $Version, $out, $update.changelog)
@@ -102,9 +108,10 @@ $giteeJob = Start-Job -Name "Gitee" -ArgumentList ($jobArgs + $giteeToken) -Scri
     "Gitee 发布完成：https://gitee.com/$repo/releases/tag/$tag"
 }
 
-$githubJob = Start-Job -Name "GitHub" -ArgumentList ($jobArgs + $githubToken) -ScriptBlock {
-    param($repo, $tag, $Version, $out, $changelog, $token)
+$githubJob = Start-Job -Name "GitHub" -ArgumentList ($jobArgs + $githubToken + $githubProxy) -ScriptBlock {
+    param($repo, $tag, $Version, $out, $changelog, $token, $proxy)
     $ErrorActionPreference = "Stop"
+    $px = if ($proxy) { @("-x", $proxy) } else { @() }
     function Read-Json($f) { $j = Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json; Remove-Item $f; $j }
     $api = "https://api.github.com/repos/$repo"
     $auth = "Authorization: Bearer $token"
@@ -112,13 +119,13 @@ $githubJob = Start-Job -Name "GitHub" -ArgumentList ($jobArgs + $githubToken) -S
     $resp = Join-Path $out "github-resp.json"
     $body = [ordered]@{ tag_name = $tag; target_commitish = "main"; name = "FSL $Version"; body = $changelog; make_latest = "true" }
     [IO.File]::WriteAllText($bodyFile, ($body | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
-    curl.exe -s -m 60 -o $resp -X POST -H $auth -H "Content-Type: application/json" --data-binary "@$bodyFile" "$api/releases"
+    curl.exe -s -m 60 @px -o $resp -X POST -H $auth -H "Content-Type: application/json" --data-binary "@$bodyFile" "$api/releases"
     Remove-Item $bodyFile
     $rel = Read-Json $resp
     if (-not $rel.id) { throw "GitHub 创建发布失败：$($rel.message)（版本 $tag 可能已经发过了）" }
     foreach ($name in @("FSL-$Version.jar", "update.json", "FSL-$Version.exe")) {
         $file = Join-Path $out $name
-        curl.exe -s -m 1800 -o $resp -X POST -H $auth -H "Content-Type: application/octet-stream" --data-binary "@$file" `
+        curl.exe -s -m 1800 @px -o $resp -X POST -H $auth -H "Content-Type: application/octet-stream" --data-binary "@$file" `
             "https://uploads.github.com/repos/$repo/releases/$($rel.id)/assets?name=$name"
         $asset = Read-Json $resp
         if ($asset.state -ne "uploaded") { throw "GitHub 上传 $name 失败：$($asset.message)" }
