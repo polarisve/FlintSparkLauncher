@@ -50,8 +50,9 @@ public final class Metadata {
 
     public static final String PUBLISH_URL = "https://github.com/polarisve/FlintSparkLauncher/releases";
     public static final String DOWNLOAD_URL = PUBLISH_URL;
-    public static final String HMCL_UPDATE_URL = System.getProperty("hmcl.update_source.override", "");
-    public static final String MANUAL_UPDATE_URL = "";
+    public static final String HMCL_UPDATE_URL = System.getProperty("hmcl.update_source.override",
+            "https://github.com/polarisve/FlintSparkLauncher/releases/latest/download/update.json");
+    public static final String MANUAL_UPDATE_URL = PUBLISH_URL;
 
     public static final String DOCS_URL = "https://docs.hmcl.net";
     public static final String CONTACT_URL = "https://discord.gg/PSKcqrQZKP";

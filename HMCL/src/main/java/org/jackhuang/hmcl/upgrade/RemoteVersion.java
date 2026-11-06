@@ -24,12 +24,13 @@ import org.jackhuang.hmcl.task.FileDownloadTask.IntegrityCheck;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.NetworkUtils;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.util.Optional;
 
 public record RemoteVersion(UpdateChannel channel, String version, String url, Type type, IntegrityCheck integrityCheck,
-                            boolean preview, boolean force) {
+                            boolean preview, boolean force, @Nullable String changelog, @Nullable String page) {
 
     public static RemoteVersion fetch(UpdateChannel channel, boolean preview, String url) throws IOException {
         try {
@@ -38,8 +39,11 @@ public record RemoteVersion(UpdateChannel channel, String version, String url, T
             String jarUrl = Optional.ofNullable(response.get("jar")).map(JsonElement::getAsString).orElse(null);
             String jarHash = Optional.ofNullable(response.get("jarsha1")).map(JsonElement::getAsString).orElse(null);
             boolean force = Optional.ofNullable(response.get("force")).map(JsonElement::getAsBoolean).orElse(false);
+            // FSL: release notes and release page are carried in the update JSON itself
+            String changelog = Optional.ofNullable(response.get("changelog")).map(JsonElement::getAsString).orElse(null);
+            String page = Optional.ofNullable(response.get("page")).map(JsonElement::getAsString).orElse(null);
             if (jarUrl != null && jarHash != null) {
-                return new RemoteVersion(channel, version, jarUrl, Type.JAR, new IntegrityCheck("SHA-1", jarHash), preview, force);
+                return new RemoteVersion(channel, version, jarUrl, Type.JAR, new IntegrityCheck("SHA-1", jarHash), preview, force, changelog, page);
             } else {
                 throw new IOException("No download url is available");
             }

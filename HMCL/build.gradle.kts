@@ -105,7 +105,8 @@ fun createChecksum(file: File) {
 }
 
 fun attachSignature(jar: File) {
-    val keyLocation = System.getenv("HMCL_SIGNATURE_KEY")
+    // FSL: the private key path comes from HMCL_SIGNATURE_KEY or signature.key in fsl-secrets.properties
+    val keyLocation = System.getenv("HMCL_SIGNATURE_KEY") ?: fslSecrets.getProperty("signature.key")?.trim()?.takeIf { it.isNotEmpty() }
     if (keyLocation == null) {
         logger.warn("Missing signature key")
         return
