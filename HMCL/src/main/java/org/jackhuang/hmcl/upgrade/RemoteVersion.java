@@ -42,7 +42,7 @@ import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
 public record RemoteVersion(UpdateChannel channel, String version, List<String> urls, Type type, IntegrityCheck integrityCheck,
                             boolean preview, boolean force, @Nullable String changelog, @Nullable String page,
-                            List<String> sources) {
+                            String source) {
 
     /// FSL: asks every source (Gitee and GitHub) at the same time on each check.
     /// The newest version found wins; download URLs from every source that offers
@@ -79,20 +79,30 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
             if (VersionNumber.compare(v.version(), newest.version()) > 0) newest = v;
         }
         List<String> urls = new ArrayList<>(newest.urls());
-        // FSL: every source offering this same jar, shown as "update source" in the update dialog
-        List<String> names = new ArrayList<>();
         for (RemoteVersion v : found) {
             if (v.version().equals(newest.version()) && v.integrityCheck().equals(newest.integrityCheck())) {
                 for (String u : v.urls()) {
                     if (!urls.contains(u)) urls.add(u);
                 }
-                for (String n : v.sources()) {
-                    if (!names.contains(n)) names.add(n);
-                }
             }
         }
-        return new RemoteVersion(newest.channel(), newest.version(), List.copyOf(urls), newest.type(), newest.integrityCheck(),
-                newest.preview(), newest.force(), newest.changelog(), newest.page(), List.copyOf(names));
+        // FSL: download from the site that answered the check (Gitee if it answered, since it is
+        // checked first); the update dialog shows that one site as the update source
+        List<String> ordered = orderUrls(urls, newest.source());
+        return new RemoteVersion(newest.channel(), newest.version(), ordered, newest.type(), newest.integrityCheck(),
+                newest.preview(), newest.force(), newest.changelog(), newest.page(), sourceName(ordered.get(0)));
+    }
+
+    /// Moves the download URLs hosted on `preferred` (e.g. "GitHub") to the front, keeping the rest in order.
+    static List<String> orderUrls(List<String> urls, String preferred) {
+        List<String> ordered = new ArrayList<>(urls.size());
+        for (String u : urls) {
+            if (sourceName(u).equals(preferred)) ordered.add(u);
+        }
+        for (String u : urls) {
+            if (!sourceName(u).equals(preferred)) ordered.add(u);
+        }
+        return List.copyOf(ordered);
     }
 
     /// Readable name of an update source: "Gitee", "GitHub", or the host.
@@ -130,7 +140,7 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
                         if (!urls.contains(m)) urls.add(m);
                     }
                 }
-                return new RemoteVersion(channel, version, List.copyOf(urls), Type.JAR, new IntegrityCheck("SHA-1", jarHash.toLowerCase(Locale.ROOT)), preview, force, changelog, page, List.of(source));
+                return new RemoteVersion(channel, version, List.copyOf(urls), Type.JAR, new IntegrityCheck("SHA-1", jarHash.toLowerCase(Locale.ROOT)), preview, force, changelog, page, source);
             } else {
                 throw new IOException("No download url is available");
             }
@@ -141,7 +151,7 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
 
     @Override
     public @NotNull String toString() {
-        return "[" + version + " from " + sources + ", " + urls + "]";
+        return "[" + version + " from " + source + ", " + urls + "]";
     }
 
     public enum Type {

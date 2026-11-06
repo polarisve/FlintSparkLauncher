@@ -60,8 +60,8 @@ class RemoteVersionTest {
         assertEquals("9.9", v.version());
         assertEquals(List.of("https://gitee.example/FSL-9.9.jar", "https://github.example/FSL-9.9.jar"), v.urls());
         assertEquals("中文说明 9.9", v.changelog());
-        // both sources offer the same jar, so both are listed as update sources
-        assertEquals(2, v.sources().size());
+        // one site is shown: the one the download starts from
+        assertEquals("gitee.example", v.source());
     }
 
     @Test
@@ -69,6 +69,14 @@ class RemoteVersionTest {
         assertEquals("Gitee", RemoteVersion.sourceName("https://gitee.com/polarisve/FlintSparkLauncher/releases/download/latest/update.json?version=1.2"));
         assertEquals("GitHub", RemoteVersion.sourceName("https://github.com/polarisve/FlintSparkLauncher/releases/latest/download/update.json"));
         assertEquals("example.com", RemoteVersion.sourceName("https://example.com/update.json"));
+    }
+
+    @Test
+    void downloadsFromTheSiteThatAnswered() {
+        // update.json always lists Gitee first; if only GitHub answered, GitHub must come first
+        List<String> urls = List.of("https://gitee.com/a/FSL-9.9.jar", "https://github.com/a/FSL-9.9.jar");
+        assertEquals(List.of("https://github.com/a/FSL-9.9.jar", "https://gitee.com/a/FSL-9.9.jar"), RemoteVersion.orderUrls(urls, "GitHub"));
+        assertEquals(urls, RemoteVersion.orderUrls(urls, "Gitee"));
     }
 
     @Test
@@ -82,8 +90,8 @@ class RemoteVersionTest {
         assertEquals("2.0", v.version());
         // the old jar from Gitee must not be mixed into the 2.0 download
         assertEquals(List.of("https://github.example/FSL-2.0.jar"), v.urls());
-        // only the source that has 2.0 is shown
-        assertEquals(List.of(RemoteVersion.sourceName(github)), v.sources());
+        // only the site that has 2.0 can be the source
+        assertEquals("github.example", v.source());
     }
 
     @Test
