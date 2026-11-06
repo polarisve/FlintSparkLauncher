@@ -10,6 +10,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# curl/git 输出的是 UTF-8，不设置的话中文会被当成 GBK 解析
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
 $repo = "polarisve/FlintSparkLauncher"
 $root = $PSScriptRoot
 Set-Location $root
