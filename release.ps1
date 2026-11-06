@@ -1,7 +1,7 @@
 ﻿# FSL 一键发版：改版本号 -> 编译并签名 -> 生成 update.json -> 发布到 GitHub Releases
 # 用法（在 FSL 目录里）:
 #   powershell -ExecutionPolicy Bypass -File release.ps1 -Version 1.1 -Notes "修复了xxx`n新增了xxx"
-# 第一次用之前要先登录 GitHub:  gh auth login
+# 用的是 git 保存的 GitHub 登录，不需要 gh
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [string]$Notes = "",
@@ -61,9 +61,25 @@ Write-Host "已生成 $out"
 if ($NoUpload) { Write-Host "没有上传（-NoUpload）"; exit 0 }
 
 # 4. 上传到 GitHub Releases，并标为最新版本
-$notesFile = Join-Path $out "notes.md"
-[IO.File]::WriteAllText($notesFile, $update.changelog, (New-Object Text.UTF8Encoding($false)))
-gh release create $tag "$out\FSL-$Version.exe" "$out\FSL-$Version.jar" $json `
-    --repo $repo --title "FSL $Version" --notes-file $notesFile --latest
-if ($LASTEXITCODE -ne 0) { throw "上传失败（没登录就先运行 gh auth login）" }
+# 用 Windows 自带的 curl.exe 和 git 保存的 GitHub 登录（gh 在这台电脑上连 API 会断）
+$cred = "protocol=https`nhost=github.com`n`n" | git credential fill
+$token = ($cred | Where-Object { $_ -like "password=*" }) -replace '^password=', ''
+if (-not $token) { throw "找不到 GitHub 登录，先用 git push 登录一次" }
+$api = "https://api.github.com/repos/$repo"
+$auth = "Authorization: Bearer $token"
+
+$bodyFile = Join-Path $out "body.json"
+$body = [ordered]@{ tag_name = $tag; target_commitish = "main"; name = "FSL $Version"; body = $update.changelog; make_latest = "true" }
+[IO.File]::WriteAllText($bodyFile, ($body | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
+$created = curl.exe -s -m 60 -X POST -H $auth -H "Content-Type: application/json" --data-binary "@$bodyFile" "$api/releases" | ConvertFrom-Json
+Remove-Item $bodyFile
+if (-not $created.id) { throw "创建发布失败：$($created.message)（版本 $tag 可能已经发过了）" }
+
+foreach ($name in @("FSL-$Version.exe", "FSL-$Version.jar", "update.json")) {
+    $file = Join-Path $out $name
+    $asset = curl.exe -s -m 900 -X POST -H $auth -H "Content-Type: application/octet-stream" --data-binary "@$file" `
+        "https://uploads.github.com/repos/$repo/releases/$($created.id)/assets?name=$name" | ConvertFrom-Json
+    if ($asset.state -ne "uploaded") { throw "上传 $name 失败：$($asset.message)" }
+    Write-Host "已上传 $name"
+}
 Write-Host "发布完成：https://github.com/$repo/releases/tag/$tag"
