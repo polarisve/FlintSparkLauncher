@@ -19,29 +19,18 @@ package org.jackhuang.hmcl.ui;
 
 import com.jfoenix.controls.JFXButton;
 import com.jfoenix.controls.JFXDialogLayout;
-import com.jfoenix.controls.JFXSpinner;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 
-import org.glavo.url.WebURL;
 import org.jackhuang.hmcl.Metadata;
-import org.jackhuang.hmcl.task.Schedulers;
-import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
 import org.jackhuang.hmcl.ui.construct.JFXHyperlink;
 import org.jackhuang.hmcl.upgrade.RemoteVersion;
 import org.jackhuang.hmcl.util.StringUtils;
-import org.jackhuang.hmcl.util.versioning.VersionNumber;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.nodes.Node;
 
-import static org.jackhuang.hmcl.Metadata.CHANGELOG_URL;
 import static org.jackhuang.hmcl.ui.FXUtils.onEscPressed;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
-import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
 public final class UpgradeDialog extends JFXDialogLayout {
 
@@ -52,61 +41,17 @@ public final class UpgradeDialog extends JFXDialogLayout {
         Label heading = new Label(i18n("update.changelog"));
         heading.setPadding(new Insets(0, 0, 8, 0));
         setHeading(heading);
-        setBody(new JFXSpinner());
 
-        String url = CHANGELOG_URL + remoteVersion.channel().channelName + ".html";
+        // FSL: the release notes come with the update JSON; the link opens the GitHub release page
+        String url = StringUtils.isNotBlank(remoteVersion.page()) ? remoteVersion.page() : Metadata.PUBLISH_URL;
+        String changelog = remoteVersion.changelog();
 
-        Task.supplyAsync(Schedulers.io(), () -> {
-            VersionNumber targetVersion = VersionNumber.asVersion(remoteVersion.version());
-            VersionNumber currentVersion = VersionNumber.asVersion(Metadata.VERSION);
-            if (targetVersion.compareTo(currentVersion) <= 0)
-                // Downgrade update, no need to display changelog
-                return null;
-
-            Document document = Jsoup.parse(WebURL.toURL(url), 30 * 1000);
-            Node node = document.selectFirst("h1[data-version=\"%s\"]".formatted(targetVersion));
-
-            HTMLRenderer renderer = new HTMLRenderer(uri -> {
-                LOG.info("Open link: " + uri);
-                FXUtils.openLink(uri.toString());
-            });
-
-            if (node == null || !"h1".equals(node.nodeName())) {
-                LOG.warning("Changelog not found");
-                Element list = new Element("ul");
-                list.appendElement("li").text(i18n("update.changelog.empty"));
-                return renderer.appendNode(list).mergeLineBreaks().render();
-            }
-
-            do {
-                if ("h1".equals(node.nodeName())) {
-                    String changelogVersion = node.attr("data-version");
-                    if (StringUtils.isBlank(changelogVersion) || currentVersion.compareTo(changelogVersion) >= 0) {
-                        break;
-                    }
-                }
-                renderer.appendNode(node);
-                node = node.nextSibling();
-            } while (node != null);
-
-            renderer.mergeLineBreaks();
-            return renderer.render();
-        }).whenComplete(Schedulers.javafx(), (result, exception) -> {
-            if (exception == null) {
-                if (result != null) {
-                    ScrollPane scrollPane = new ScrollPane(result);
-                    scrollPane.setFitToWidth(true);
-                    FXUtils.smoothScrolling(scrollPane);
-                    setBody(scrollPane);
-                } else {
-                    setBody();
-                }
-            } else {
-                LOG.warning("Failed to load update log, trying to open it in browser");
-                FXUtils.openLink(url);
-                setBody();
-            }
-        }).start();
+        Label notes = new Label(StringUtils.isBlank(changelog) ? i18n("update.changelog.empty") : changelog.strip());
+        notes.setWrapText(true);
+        ScrollPane scrollPane = new ScrollPane(notes);
+        scrollPane.setFitToWidth(true);
+        FXUtils.smoothScrolling(scrollPane);
+        setBody(scrollPane);
 
         JFXHyperlink openInBrowser = new JFXHyperlink(i18n("web.view_in_browser"));
         openInBrowser.setExternalLink(url);
