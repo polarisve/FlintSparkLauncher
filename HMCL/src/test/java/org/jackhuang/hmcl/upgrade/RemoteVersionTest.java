@@ -111,4 +111,18 @@ class RemoteVersionTest {
         String b = dir.resolve("b.json").toUri().toString();
         assertThrows(IOException.class, () -> RemoteVersion.fetch(UpdateChannel.STABLE, false, List.of(a, b)));
     }
+
+    @Test
+    void playerCanChooseEitherSource() {
+        RemoteVersion v = new RemoteVersion(UpdateChannel.STABLE, "9.9",
+                List.of("https://gitee.com/a/FSL-9.9.jar", "https://github.com/a/FSL-9.9.jar"),
+                RemoteVersion.Type.JAR, new org.jackhuang.hmcl.task.FileDownloadTask.IntegrityCheck("SHA-1", SHA1),
+                false, false, null, null, "Gitee");
+
+        assertEquals(List.of("Gitee", "GitHub"), v.sources());
+
+        RemoteVersion github = v.withSource("GitHub");
+        assertEquals("GitHub", github.source());
+        assertEquals(List.of("https://github.com/a/FSL-9.9.jar", "https://gitee.com/a/FSL-9.9.jar"), github.urls());
+    }
 }

@@ -39,8 +39,10 @@ public final class ProxyManager {
 
     static {
         ProxySelector systemProxySelector = ProxySelector.getDefault();
+        // FSL: when the Windows system proxy is set but the proxy program is closed, every
+        // connection used to fail with "Connection refused"; fall back to a direct connection
         SYSTEM_DEFAULT = systemProxySelector != null
-                ? new ProxySelectorWrapper(systemProxySelector)
+                ? new ProxySelectorWrapper(systemProxySelector, true)
                 : NO_PROXY;
     }
 
@@ -155,9 +157,15 @@ public final class ProxyManager {
     /// Wraps another ProxySelector to avoid using proxy for loopback addresses.
     private static final class ProxySelectorWrapper extends AbstractProxySelector {
         private final ProxySelector source;
+        private final boolean fallbackDirect;
 
         ProxySelectorWrapper(ProxySelector source) {
+            this(source, false);
+        }
+
+        ProxySelectorWrapper(ProxySelector source, boolean fallbackDirect) {
             this.source = source;
+            this.fallbackDirect = fallbackDirect;
         }
 
         @Override
@@ -168,7 +176,21 @@ public final class ProxyManager {
             if (NetworkUtils.isLoopbackAddress(uri))
                 return NO_PROXY.proxies;
 
-            return source.select(uri);
+            List<Proxy> proxies = source.select(uri);
+            // FSL: HttpURLConnection tries the proxies in order, so a dead system proxy
+            // is followed by a direct connection instead of failing
+            if (fallbackDirect && proxies != null && !proxies.isEmpty() && !proxies.contains(Proxy.NO_PROXY)) {
+                List<Proxy> withDirect = new java.util.ArrayList<>(proxies);
+                withDirect.add(Proxy.NO_PROXY);
+                return withDirect;
+            }
+            return proxies;
+        }
+
+        @Override
+        public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
+            super.connectFailed(uri, sa, ioe);
+            source.connectFailed(uri, sa, ioe);
         }
     }
 

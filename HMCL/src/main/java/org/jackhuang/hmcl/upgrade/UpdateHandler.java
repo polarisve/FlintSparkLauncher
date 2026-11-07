@@ -106,7 +106,9 @@ public final class UpdateHandler {
             return;
         }
 
-        Controllers.dialog(new UpgradeDialog(version, () -> {
+        Controllers.dialog(new UpgradeDialog(version, chosen -> {
+            // FSL: download from the site the player chose (the other one is the backup)
+            LOG.info("Updating to " + chosen);
             Path downloaded;
             try {
                 downloaded = Files.createTempFile("hmcl-update-", ".jar");
@@ -115,7 +117,7 @@ public final class UpdateHandler {
                 return;
             }
 
-            Task<?> task = new HMCLDownloadTask(version, downloaded);
+            Task<?> task = new HMCLDownloadTask(chosen, downloaded);
 
             TaskExecutor executor = task.executor();
             Controllers.taskDialog(executor, i18n("message.downloading"), TaskCancellationAction.NORMAL);

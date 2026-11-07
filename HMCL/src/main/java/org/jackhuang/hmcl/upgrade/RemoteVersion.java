@@ -50,11 +50,17 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
     public static RemoteVersion fetch(UpdateChannel channel, boolean preview, List<String> sources) throws IOException {
         List<CompletableFuture<RemoteVersion>> futures = sources.stream()
                 .map(source -> CompletableFuture.supplyAsync(() -> {
-                    try {
-                        return parse(channel, preview, NetworkUtils.doGet(source), sourceName(source));
-                    } catch (IOException e) {
-                        throw new CompletionException(new IOException("Update source " + source + " failed", e));
+                    // FSL: one network hiccup should not hide an update, so each source is tried twice
+                    IOException last = null;
+                    for (int attempt = 0; attempt < 2; attempt++) {
+                        try {
+                            return parse(channel, preview, NetworkUtils.doGet(source), sourceName(source));
+                        } catch (IOException e) {
+                            if (last != null) e.addSuppressed(last);
+                            last = e;
+                        }
                     }
+                    throw new CompletionException(new IOException("Update source " + source + " failed", last));
                 }, Schedulers.io()))
                 .toList();
 
@@ -91,6 +97,22 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
         List<String> ordered = orderUrls(urls, newest.source());
         return new RemoteVersion(newest.channel(), newest.version(), ordered, newest.type(), newest.integrityCheck(),
                 newest.preview(), newest.force(), newest.changelog(), newest.page(), sourceName(ordered.get(0)));
+    }
+
+    /// Sites ("Gitee", "GitHub", ...) this version can be downloaded from, in download order.
+    public List<String> sources() {
+        List<String> names = new ArrayList<>();
+        for (String u : urls) {
+            String name = sourceName(u);
+            if (!names.contains(name)) names.add(name);
+        }
+        return List.copyOf(names);
+    }
+
+    /// The same version, downloaded from `chosen` first (the other site is only a backup if it fails).
+    public RemoteVersion withSource(String chosen) {
+        return new RemoteVersion(channel, version, orderUrls(urls, chosen), type, integrityCheck,
+                preview, force, changelog, page, chosen);
     }
 
     /// Moves the download URLs hosted on `preferred` (e.g. "GitHub") to the front, keeping the rest in order.
