@@ -24,7 +24,6 @@ import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.ToggleGroup;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 import org.jackhuang.hmcl.Metadata;
@@ -57,7 +56,7 @@ public final class UpgradeDialog extends JFXDialogLayout {
         showChangelogPage();
     }
 
-    /// First page: update source, release notes, and "查看" which opens the source chooser.
+    /// First page: release notes, and "查看" which opens the source chooser.
     private void showChangelogPage() {
         Label heading = new Label(i18n("update.changelog"));
         heading.setPadding(new Insets(0, 0, 8, 0));
@@ -73,12 +72,8 @@ public final class UpgradeDialog extends JFXDialogLayout {
         scrollPane.setFitToWidth(true);
         FXUtils.smoothScrolling(scrollPane);
 
-        // FSL: the one site (Gitee or GitHub) this update comes from
-        Label source = new Label(i18n("update.source", remoteVersion.source()));
-        source.setWrapText(true);
-        VBox body = new VBox(8, source, scrollPane);
-        VBox.setVgrow(scrollPane, Priority.ALWAYS);
-        setBody(body);
+        // FSL: no "更新源" line here; the source is chosen on the next page
+        setBody(scrollPane);
 
         JFXHyperlink openInBrowser = new JFXHyperlink(i18n("web.view_in_browser"));
         openInBrowser.setExternalLink(url);
