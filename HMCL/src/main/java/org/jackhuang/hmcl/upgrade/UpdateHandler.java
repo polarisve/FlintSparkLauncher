@@ -107,7 +107,7 @@ public final class UpdateHandler {
         }
 
         Controllers.dialog(new UpgradeDialog(version, chosen -> {
-            // FSL: download from the site the player chose (the other one is the backup)
+            // FSL: download from the faster site found by the network test (the other one is the backup)
             LOG.info("Updating to " + chosen);
             Path downloaded;
             try {
