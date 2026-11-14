@@ -84,7 +84,11 @@ if ($githubProxy) { git -c http.proxy=$githubProxy push origin main } else { git
 if ($LASTEXITCODE -ne 0) { throw "推送到 GitHub 失败" }
 
 # 两边共用的参数；curl 结果写进文件再按 UTF-8 读，避免后台任务里中文乱码
-$jobArgs = @($repo, $tag, $Version, $out, $update.changelog)
+# 发布页说明 = 更新说明 + 下载说明（误报怎么办、jar 怎么用）；启动器更新弹窗只显示 update.json 里的更新说明
+$helpFile = Join-Path $root "release-download-help.md"
+$releaseBody = $update.changelog
+if (Test-Path $helpFile) { $releaseBody += "`n" + ([IO.File]::ReadAllText($helpFile, [Text.Encoding]::UTF8) -replace '\{version\}', $Version) }
+$jobArgs = @($repo, $tag, $Version, $out, $releaseBody)
 
 $giteeJob = Start-Job -Name "Gitee" -ArgumentList ($jobArgs + $giteeToken) -ScriptBlock {
     param($repo, $tag, $Version, $out, $changelog, $token)
