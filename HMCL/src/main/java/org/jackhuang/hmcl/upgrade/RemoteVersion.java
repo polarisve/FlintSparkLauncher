@@ -29,6 +29,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +39,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
@@ -113,6 +118,81 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
     public RemoteVersion withSource(String chosen) {
         return new RemoteVersion(channel, version, orderUrls(urls, chosen), type, integrityCheck,
                 preview, force, changelog, page, chosen);
+    }
+
+    /// FSL: tests the network before downloading. Every site is asked for the first part of the
+    /// jar at the same time; the site that delivers it fastest is downloaded from first, and the
+    /// other site stays as the backup. If no site answers, the current order is kept.
+    public RemoteVersion withFastestSource() {
+        List<String> names = sources();
+        if (names.size() < 2) return this;
+        List<CompletableFuture<Double>> speeds = names.stream()
+                .map(name -> CompletableFuture.supplyAsync(() -> probeSpeed(orderUrls(urls, name).get(0)), Schedulers.io()))
+                .toList();
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(PROBE_DEADLINE_MILLIS);
+        String best = null;
+        double bestSpeed = 0;
+        for (int i = 0; i < names.size(); i++) {
+            // FSL: the whole test waits at most PROBE_DEADLINE_MILLIS; a site still silent by then counts as unreachable
+            long remaining = Math.max(deadline - System.nanoTime(), 0);
+            double speed;
+            try {
+                speed = speeds.get(i).get(remaining, TimeUnit.NANOSECONDS);
+            } catch (TimeoutException e) {
+                speeds.get(i).cancel(true);
+                speed = 0;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                speed = 0;
+            } catch (ExecutionException e) {
+                speed = 0;
+            }
+            LOG.info("Update source " + names.get(i) + " speed: " + Math.round(speed) + " bytes/s");
+            if (speed > bestSpeed) {
+                bestSpeed = speed;
+                best = names.get(i);
+            }
+        }
+        if (best == null) {
+            LOG.warning("No update source answered the network test, keeping " + source);
+            return this;
+        }
+        LOG.info("Network test picked update source " + best);
+        return withSource(best);
+    }
+
+    private static final int PROBE_BYTES = 512 * 1024;
+    private static final long PROBE_MILLIS = 5000;
+    private static final long PROBE_DEADLINE_MILLIS = 6000;
+
+    /// Bytes per second while reading the start of `url`; 0 if the site cannot be reached.
+    private static double probeSpeed(String url) {
+        long start = System.nanoTime();
+        HttpURLConnection conn = null;
+        try {
+            conn = NetworkUtils.createHttpConnection(url);
+            conn.setConnectTimeout((int) PROBE_MILLIS);
+            conn.setReadTimeout((int) PROBE_MILLIS);
+            conn = NetworkUtils.resolveConnection(conn);
+            conn.setReadTimeout((int) PROBE_MILLIS);
+            if (conn.getResponseCode() / 100 != 2) return 0;
+            long read = 0;
+            byte[] buffer = new byte[8192];
+            try (InputStream in = conn.getInputStream()) {
+                int n;
+                while (read < PROBE_BYTES && (n = in.read(buffer)) != -1) {
+                    read += n;
+                    if ((System.nanoTime() - start) / 1_000_000 > PROBE_MILLIS) break;
+                }
+            }
+            double seconds = Math.max((System.nanoTime() - start) / 1e9, 0.001);
+            return read / seconds;
+        } catch (IOException | RuntimeException e) {
+            LOG.warning("Network test failed for " + url, e);
+            return 0;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
     }
 
     /// Moves the download URLs hosted on `preferred` (e.g. "GitHub") to the front, keeping the rest in order.
