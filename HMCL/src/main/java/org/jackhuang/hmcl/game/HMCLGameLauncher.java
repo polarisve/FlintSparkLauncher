@@ -22,6 +22,7 @@ import org.jackhuang.hmcl.auth.AuthInfo;
 import org.jackhuang.hmcl.launch.DefaultLauncher;
 import org.jackhuang.hmcl.launch.ProcessListener;
 import org.jackhuang.hmcl.util.NativePatcher;
+import org.jackhuang.hmcl.ui.fsl.FslLaunchCard;
 import org.jackhuang.hmcl.util.i18n.LocaleUtils;
 import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.io.JarUtils;
@@ -157,6 +158,20 @@ public final class HMCLGameLauncher extends DefaultLauncher {
     public ManagedProcess launch() throws IOException, InterruptedException {
         generateOptionsTxt();
         return super.launch();
+    }
+
+    /// FSL: mirrors PCL's launch loaders — the card shows 解压文件 / 执行自定义命令 / 启动进程
+    /// exactly while those operations really happen.
+    @Override
+    protected void onLaunchPhase(String phase) {
+        switch (phase) {
+            case "natives" -> FslLaunchCard.enter(FslLaunchCard.LaunchStep.NATIVES);
+            case "prerun" -> FslLaunchCard.enter(FslLaunchCard.LaunchStep.PRERUN);
+            case "custom" -> FslLaunchCard.enter(FslLaunchCard.LaunchStep.CUSTOM);
+            case "process" -> FslLaunchCard.enter(FslLaunchCard.LaunchStep.PROCESS);
+            default -> {
+            }
+        }
     }
 
     @Override
