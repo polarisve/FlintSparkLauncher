@@ -29,6 +29,7 @@ import javafx.css.PseudoClass;
 import javafx.geometry.Bounds;
 import javafx.geometry.Pos;
 import javafx.scene.AccessibleRole;
+import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.HBox;
@@ -71,7 +72,9 @@ public final class FslTabs<K> extends StackPane {
 
     private final java.util.List<Label> labels = new java.util.ArrayList<>();
 
-    private boolean compact;
+    private final java.util.List<Node> icons = new java.util.ArrayList<>();
+
+    private Mode mode = Mode.FULL;
 
     /// The selected tab, or `null` when none is selected.
     private final ObjectProperty<@Nullable K> selected = new SimpleObjectProperty<>(this, "selected");
@@ -117,7 +120,9 @@ public final class FslTabs<K> extends StackPane {
         Label label = new Label(text);
         // Never shrink a tab: squeezed labels turned into "..." when the title bar got crowded
         label.setMinWidth(Region.USE_PREF_SIZE);
-        HBox item = new HBox(5, icon.createIcon(15), label);
+        Node iconNode = icon.createIcon(15);
+        icons.add(iconNode);
+        HBox item = new HBox(5, iconNode, label);
         item.setMinWidth(Region.USE_PREF_SIZE);
         item.getStyleClass().add("fsl-tab");
         // Re-align the highlight whenever this tab moves (title bar re-layout, window resize)
@@ -148,25 +153,43 @@ public final class FslTabs<K> extends StackPane {
     /// The handler is responsible for updating [#selectedProperty()], for example after navigating.
     ///
     /// @param handler called with the activated key
-    /// Width of the tab bar with every label shown. Stays the same in compact mode, so it can
-    /// decide about compact mode without flipping back and forth.
-    public double fullWidth() {
+    /// How much of each tab is shown when the title bar gets narrow.
+    public enum Mode {
+        /// Icon and name.
+        FULL,
+        /// Name only: long languages still read as text.
+        TEXT,
+        /// Icon only, the name in a tooltip (last resort).
+        ICON
+    }
+
+    /// Width of the tab bar in `wanted` mode, whatever the current mode is. Computed from the
+    /// parts, so it can decide the mode without flipping back and forth.
+    public double widthFor(Mode wanted) {
         double width = prefWidth(-1);
-        if (compact) {
-            for (Label label : labels) {
-                width += label.prefWidth(-1) + 5;
-            }
+        for (int i = 0; i < labels.size(); i++) {
+            double label = labels.get(i).prefWidth(-1) + 5;
+            double icon = icons.get(i).prefWidth(-1) + 5;
+            // back to FULL first
+            if (mode == Mode.TEXT) width += icon;
+            if (mode == Mode.ICON) width += label;
+            if (wanted == Mode.TEXT) width -= icon;
+            if (wanted == Mode.ICON) width -= label;
         }
         return width;
     }
 
-    /// Hides the labels (icons only, the name in a tooltip) or shows them again.
-    public void setCompact(boolean compact) {
-        if (this.compact == compact) return;
-        this.compact = compact;
+    /// Switches how much of each tab is shown.
+    public void setMode(Mode mode) {
+        if (this.mode == mode) return;
+        this.mode = mode;
         for (Label label : labels) {
-            label.setVisible(!compact);
-            label.setManaged(!compact);
+            label.setVisible(mode != Mode.ICON);
+            label.setManaged(mode != Mode.ICON);
+        }
+        for (Node icon : icons) {
+            icon.setVisible(mode != Mode.TEXT);
+            icon.setManaged(mode != Mode.TEXT);
         }
         requestLayout();
         // Snap the highlight once the new layout is done (two pulses later), without sliding

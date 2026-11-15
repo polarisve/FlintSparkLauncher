@@ -244,16 +244,19 @@ public final class FslTaskCenter {
             node.setScaleY(1);
             return;
         }
-        Interpolator back = Interpolator.SPLINE(0.34, 1.56, 0.64, 1);
+        // Grows a little past full size and settles back (SPLINE only accepts points in [0,1])
         new Timeline(
                 new KeyFrame(Duration.ZERO,
                         new KeyValue(node.scaleXProperty(), 0.3),
                         new KeyValue(node.scaleYProperty(), 0.3),
                         new KeyValue(node.opacityProperty(), 0)),
-                new KeyFrame(Duration.millis(260),
-                        new KeyValue(node.scaleXProperty(), 1, back),
-                        new KeyValue(node.scaleYProperty(), 1, back),
-                        new KeyValue(node.opacityProperty(), 1))
+                new KeyFrame(Duration.millis(180),
+                        new KeyValue(node.scaleXProperty(), 1.12, Interpolator.EASE_OUT),
+                        new KeyValue(node.scaleYProperty(), 1.12, Interpolator.EASE_OUT),
+                        new KeyValue(node.opacityProperty(), 1)),
+                new KeyFrame(Duration.millis(280),
+                        new KeyValue(node.scaleXProperty(), 1, Interpolator.EASE_BOTH),
+                        new KeyValue(node.scaleYProperty(), 1, Interpolator.EASE_BOTH))
         ).play();
     }
 

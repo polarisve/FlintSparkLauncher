@@ -85,14 +85,14 @@ public final class FslNavigationTabs extends StackPane {
         getChildren().add(tabs);
     }
 
-    /// FSL: width of the tabs with every label shown, whether or not they are compact now.
-    public double fullWidth() {
-        return tabs.fullWidth();
+    /// FSL: width of the tabs in the given mode.
+    public double widthFor(FslTabs.Mode mode) {
+        return tabs.widthFor(mode);
     }
 
-    /// FSL: shows only the icons when the title bar is too narrow for the labels.
-    public void setCompact(boolean compact) {
-        tabs.setCompact(compact);
+    /// FSL: how much of each tab is shown (icon + name, name only, icon only).
+    public void setMode(FslTabs.Mode mode) {
+        tabs.setMode(mode);
     }
 
     /// Opens a destination.
