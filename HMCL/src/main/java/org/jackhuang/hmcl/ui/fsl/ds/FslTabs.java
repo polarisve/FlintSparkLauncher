@@ -69,6 +69,10 @@ public final class FslTabs<K> extends StackPane {
     /// Tab nodes by key, in insertion order.
     private final Map<K, HBox> items = new LinkedHashMap<>();
 
+    private final java.util.List<Label> labels = new java.util.ArrayList<>();
+
+    private boolean compact;
+
     /// The selected tab, or `null` when none is selected.
     private final ObjectProperty<@Nullable K> selected = new SimpleObjectProperty<>(this, "selected");
 
@@ -100,6 +104,8 @@ public final class FslTabs<K> extends StackPane {
             moveIndicator(true);
         });
         row.layoutBoundsProperty().addListener(o -> moveIndicator(false));
+        row.layoutXProperty().addListener(o -> moveIndicator(false));
+        overlay.layoutXProperty().addListener(o -> moveIndicator(false));
     }
 
     /// Adds a tab.
@@ -124,6 +130,8 @@ public final class FslTabs<K> extends StackPane {
         item.setFocusTraversable(true);
         item.setAccessibleRole(AccessibleRole.BUTTON);
         item.setAccessibleText(text);
+        labels.add(label);
+        javafx.scene.control.Tooltip.install(item, new javafx.scene.control.Tooltip(text));
         item.setOnMouseClicked(e -> activate(key));
         item.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ENTER || e.getCode() == KeyCode.SPACE) {
@@ -140,6 +148,37 @@ public final class FslTabs<K> extends StackPane {
     /// The handler is responsible for updating [#selectedProperty()], for example after navigating.
     ///
     /// @param handler called with the activated key
+    /// Width of the tab bar with every label shown. Stays the same in compact mode, so it can
+    /// decide about compact mode without flipping back and forth.
+    public double fullWidth() {
+        double width = prefWidth(-1);
+        if (compact) {
+            for (Label label : labels) {
+                width += label.prefWidth(-1) + 5;
+            }
+        }
+        return width;
+    }
+
+    /// Hides the labels (icons only, the name in a tooltip) or shows them again.
+    public void setCompact(boolean compact) {
+        if (this.compact == compact) return;
+        this.compact = compact;
+        for (Label label : labels) {
+            label.setVisible(!compact);
+            label.setManaged(!compact);
+        }
+        requestLayout();
+        // Snap the highlight once the new layout is done (two pulses later), without sliding
+        Platform.runLater(() -> Platform.runLater(() -> {
+            if (slide != null) {
+                slide.stop();
+                slide = null;
+            }
+            moveIndicator(false);
+        }));
+    }
+
     public void setOnActivate(Consumer<K> handler) {
         this.onActivate = handler;
     }
@@ -174,7 +213,13 @@ public final class FslTabs<K> extends StackPane {
             return;
         }
 
-        Bounds bounds = overlay.sceneToLocal(item.localToScene(item.getLayoutBounds()));
+        // Row and overlay are siblings in this pane: work in local coordinates. Scene coordinates were
+        // wrong while the whole title bar was still being laid out (after a language switch).
+        Bounds inRow = item.getBoundsInParent();
+        Bounds bounds = new javafx.geometry.BoundingBox(
+                inRow.getMinX() + row.getLayoutX() - overlay.getLayoutX(),
+                inRow.getMinY() + row.getLayoutY() - overlay.getLayoutY(),
+                inRow.getWidth(), inRow.getHeight());
         indicator.setLayoutY(bounds.getMinY());
         indicator.resize(indicator.getWidth(), bounds.getHeight());
 

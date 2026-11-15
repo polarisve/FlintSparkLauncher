@@ -40,6 +40,12 @@ public class DecoratorWizardDisplayer extends DecoratorTransitionPage implements
         @Override
         public void navigateTo(Node page, Navigation.NavigationDirection nav) {
         }
+
+        @Override
+        protected void onTaskStarted() {
+            // Only leaves the page; the wizard's settings stay alive until the task stops.
+            fireEvent(new PageCloseEvent());
+        }
     };
 
     private final String category;

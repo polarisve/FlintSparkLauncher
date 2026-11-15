@@ -22,6 +22,7 @@ import org.jackhuang.hmcl.ui.fsl.FslNavigationTabs;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 import org.jackhuang.hmcl.ui.fsl.ds.FslTopBar;
 import org.jackhuang.hmcl.ui.fsl.FslSearchPage;
+import org.jackhuang.hmcl.ui.fsl.FslTaskCenter;
 
 import com.jfoenix.controls.JFXButton;
 import javafx.animation.Interpolator;
@@ -30,6 +31,7 @@ import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
 import javafx.beans.InvalidationListener;
 import javafx.beans.binding.Bindings;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -87,6 +89,9 @@ final class MainWindowPane extends StackPane {
     /// FSL: tabs in the middle of the title bar, used to size the page title.
     private @Nullable Node titleTabs;
 
+    /// FSL: space kept left of the tabs for the logo and the page title.
+    private static final double MIN_TITLE_ROOM = 80;
+
     /// FSL: search box and window buttons, used to size the page title.
     private @Nullable Node titleRight;
 
@@ -127,6 +132,11 @@ final class MainWindowPane extends StackPane {
         center.getStyleClass().add("jfx-decorator-content-container");
         FXUtils.setOverflowHidden(center);
         center.getChildren().setAll(decorator.getNavigator());
+        // FSL: like PCL, running tasks show up as a round button in the lower right corner
+        Node taskButton = FslTaskCenter.createButton();
+        StackPane.setAlignment(taskButton, Pos.BOTTOM_RIGHT);
+        StackPane.setMargin(taskButton, new Insets(0, 22, 22, 0));
+        center.getChildren().add(taskButton);
         frame.setCenter(center);
 
         windowButtons = createWindowButtons();
@@ -137,6 +147,15 @@ final class MainWindowPane extends StackPane {
             @Override
             protected void layoutChildren() {
                 if (titleTabs != null && titleRight != null) {
+                    if (titleTabs instanceof FslNavigationTabs navigationTabs) {
+                        // FSL: long labels (German, Ukrainian...) used to push the tabs over the logo and
+                        // page title. Without room for the labels, show only the icons. The decision uses
+                        // the full width, which does not change with compact mode, so it never flips.
+                        double free = getWidth() - snappedLeftInset() - snappedRightInset()
+                                - navigationTabs.fullWidth() - titleRight.prefWidth(-1);
+                        boolean compact = free < MIN_TITLE_ROOM;
+                        Platform.runLater(() -> navigationTabs.setCompact(compact));
+                    }
                     double room = Math.max(0, getWidth() - snappedLeftInset() - snappedRightInset()
                             - titleTabs.prefWidth(-1) - titleRight.prefWidth(-1));
                     navBarPane.setPrefWidth(room);
@@ -153,10 +172,7 @@ final class MainWindowPane extends StackPane {
         titleBar.setMinWidth(0);
         // FSL: global search left of the window buttons. The magnifier opens one page with every
         // kind of result (instances, game versions, modpacks, mods, resource packs, shaders, worlds).
-        FslTopBar search = new FslTopBar(i18n("fsl.search.prompt"),
-                keyword -> FslSearchPage.open(keyword, () -> decorator.getNavigator().clear()));
-        search.setPickOnBounds(false);
-        search.setStyle("-fx-padding: 0 8 0 0;");
+        FslTopBar search = createSearch();
         HBox right = new HBox(search, windowButtons);
         right.setAlignment(Pos.CENTER_RIGHT);
         titleBar.setRight(right);
@@ -169,12 +185,10 @@ final class MainWindowPane extends StackPane {
         decorator.capableDraggingWindow(navBarPane);
 
         // FSL: top-level pages as tabs in the middle of the title bar
-        FslNavigationTabs tabs = new FslNavigationTabs(() -> decorator.getNavigator().clear());
-        decorator.getNavigator().addEventHandler(Navigator.NavigationEvent.NAVIGATED, event -> tabs.sync(event.getNode()));
-        decorator.forbidDraggingWindow(tabs);
-        decorator.forbidDraggingWindow(search);
-        titleBar.setCenter(tabs);
-        titleTabs = tabs;
+        decorator.getNavigator().addEventHandler(Navigator.NavigationEvent.NAVIGATED, event -> {
+            if (titleTabs instanceof FslNavigationTabs current) current.sync(event.getNode());
+        });
+        installTabs();
 
         frame.setTop(titleBar);
 
@@ -240,6 +254,36 @@ final class MainWindowPane extends StackPane {
     /// Creates the help, minimize, and application-close buttons.
     ///
     /// @return a size-limited top-right button row
+    /// FSL: creates the title-bar search box in the current language.
+    private FslTopBar createSearch() {
+        FslTopBar search = new FslTopBar(i18n("fsl.search.prompt"),
+                keyword -> FslSearchPage.open(keyword, () -> decorator.getNavigator().clear()));
+        search.setPickOnBounds(false);
+        search.setStyle("-fx-padding: 0 8 0 0;");
+        decorator.forbidDraggingWindow(search);
+        return search;
+    }
+
+    /// FSL: puts the navigation tabs, in the current language, in the middle of the title bar.
+    private void installTabs() {
+        FslNavigationTabs tabs = new FslNavigationTabs(() -> decorator.getNavigator().clear());
+        decorator.forbidDraggingWindow(tabs);
+        titleBar.setCenter(tabs);
+        titleTabs = tabs;
+    }
+
+    /// FSL: rebuilds the title-bar texts after the language changed, so no restart is needed.
+    void reloadTexts() {
+        installTabs();
+        if (titleRight instanceof HBox right && !right.getChildren().isEmpty()) {
+            right.getChildren().set(0, createSearch());
+            if (right.getChildren().size() > 1) {
+                right.getChildren().set(1, createWindowButtons());
+            }
+        }
+        titleBar.requestLayout();
+    }
+
     private HBox createWindowButtons() {
         HBox buttons = new HBox();
         buttons.setAlignment(Pos.TOP_RIGHT);

@@ -72,17 +72,27 @@ public final class FslNavigationTabs extends StackPane {
         this.goHome = goHome;
 
         tabs.addItem(Destination.HOME, SVG.HOME, i18n("fsl.nav.home"));
-        tabs.addItem(Destination.DOWNLOAD, SVG.DOWNLOAD, i18n("download"));
+        tabs.addItem(Destination.DOWNLOAD, SVG.DOWNLOAD, i18n("fsl.nav.download"));
         tabs.addItem(Destination.INSTANCES, SVG.DEPLOYED_CODE, i18n("fsl.nav.instances"));
-        tabs.addItem(Destination.ACCOUNT, SVG.PERSON, i18n("account"));
+        tabs.addItem(Destination.ACCOUNT, SVG.PERSON, i18n("fsl.nav.account"));
         tabs.addItem(Destination.ONLINE, SVG.STADIA_CONTROLLER, i18n("fsl.nav.online"));
-        tabs.addItem(Destination.SETTINGS, SVG.SETTINGS, i18n("settings"));
+        tabs.addItem(Destination.SETTINGS, SVG.SETTINGS, i18n("fsl.nav.settings"));
         tabs.setOnActivate(this::open);
         tabs.selectedProperty().set(Destination.HOME);
 
         setMaxSize(USE_PREF_SIZE, USE_PREF_SIZE);
         setMinWidth(USE_PREF_SIZE);
         getChildren().add(tabs);
+    }
+
+    /// FSL: width of the tabs with every label shown, whether or not they are compact now.
+    public double fullWidth() {
+        return tabs.fullWidth();
+    }
+
+    /// FSL: shows only the icons when the title bar is too narrow for the labels.
+    public void setCompact(boolean compact) {
+        tabs.setCompact(compact);
     }
 
     /// Opens a destination.
