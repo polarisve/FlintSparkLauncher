@@ -332,22 +332,15 @@ public final class MainPage extends StackPane implements DecoratorPage {
         VBox hero = FslHome.createHero(currentGameProperty());
         FslHome.installLaunchEffects(launchPane);
 
-        Region sideGrow = new Region();
-        VBox.setVgrow(sideGrow, Priority.ALWAYS);
-        VBox side = new VBox(12, FslHome.createAccountCard(), sideGrow, launchPane);
-        side.getStyleClass().add("fsl-home-side");
-        FXUtils.setLimitWidth(side, 240);
-        StackPane.setAlignment(side, Pos.CENTER_LEFT);
-        // Cancel this page's padding so the panel touches the window edges
-        StackPane.setMargin(side, new Insets(-20, 0, -20, -20));
-        StackPane.setMargin(hero, new Insets(0, 0, 0, 236));
-
-        // FSL: while a game launches the left column shows the launch card, like PCL
-        Region sideColumn = (Region) org.jackhuang.hmcl.ui.fsl.FslLaunchCard.wrap(side);
-        StackPane.setAlignment(sideColumn, Pos.CENTER_LEFT);
-        StackPane.setMargin(sideColumn, StackPane.getMargin(side));
-        StackPane.setMargin(side, null);
+        // FSL: like PCL, launching shows the launch card in the middle, account stays at top, button disappears
+        Node accountCard = FslHome.createAccountCard();
+        Region sideColumn = (Region) org.jackhuang.hmcl.ui.fsl.FslLaunchCard.wrap(accountCard, launchPane);
+        sideColumn.getStyleClass().add("fsl-home-side");
         FXUtils.setLimitWidth(sideColumn, 240);
+        StackPane.setAlignment(sideColumn, Pos.CENTER_LEFT);
+        // Cancel this page's padding so the panel touches the window edges
+        StackPane.setMargin(sideColumn, new Insets(-20, 0, -20, -20));
+        StackPane.setMargin(hero, new Insets(0, 0, 0, 236));
         getChildren().addAll(sideColumn, hero, updatePane);
 
     }
