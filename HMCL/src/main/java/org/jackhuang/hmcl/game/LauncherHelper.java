@@ -304,10 +304,14 @@ public final class LauncherHelper {
                         if (launcherVisibility == LauncherVisibility.CLOSE)
                             Launcher.stopApplication();
                         else
+                        {
                             launchingStepsPane.setCancel(it -> {
                                 process.stop();
                                 it.fireEvent(new DialogCloseEvent());
                             });
+                            // FSL: cancel on the launch card also stops the game once it is running
+                            org.jackhuang.hmcl.ui.fsl.FslLaunchCard.setProcessStopper(process::stop);
+                        }
                     } else {
                         runLater(() -> {
                             launchingStepsPane.fireEvent(new DialogCloseEvent());
