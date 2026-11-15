@@ -54,6 +54,7 @@ import org.jackhuang.hmcl.ui.download.DownloadPage;
 import org.jackhuang.hmcl.ui.main.LauncherSettingsPage;
 import org.jackhuang.hmcl.ui.main.RootPage;
 import org.jackhuang.hmcl.ui.terracotta.TerracottaPage;
+import org.jackhuang.hmcl.ui.fsl.FslTaskCenter;
 import org.jackhuang.hmcl.ui.instances.GameListPage;
 import org.jackhuang.hmcl.ui.instances.GameInstancePage;
 import org.jackhuang.hmcl.ui.instances.Instances;
@@ -96,13 +97,7 @@ public final class Controllers {
     private static @Nullable Decorator decorator;
 
     private static DownloadPage downloadPage;
-    private static Lazy<AccountListPage> accountListPage = new Lazy<>(() -> {
-        AccountListPage accountListPage = new AccountListPage();
-        accountListPage.selectedAccountProperty().bindBidirectional(Accounts.selectedAccountProperty());
-        accountListPage.accountsProperty().bindContent(Accounts.getAccounts());
-        accountListPage.authServersProperty().bindContentBidirectional(getAuthlibInjectorServers());
-        return accountListPage;
-    });
+    private static Lazy<AccountListPage> accountListPage = new Lazy<>(Controllers::createAccountListPage);
     private static LauncherSettingsPage settingsPage;
     private static Lazy<TerracottaPage> terracottaPage = new Lazy<>(TerracottaPage::new);
 
@@ -219,6 +214,48 @@ public final class Controllers {
         WindowsNativeUtils.installWindowsAppUserModelRelaunchProperties(stage);
     }
 
+    private static void bindUpdateHints() {
+        getRootPage().getMainPage().showUpdateProperty().bind(UpdateChecker.checkingUpdateProperty().not().and(UpdateChecker.outdatedProperty()));
+        getRootPage().getMainPage().showUpdateDialogProperty().bind(
+                getDecorator().backableProperty().not()
+                        .and(getRootPage().getMainPage().showUpdateProperty())
+                        .and(settings().disableAutoShowUpdateDialogProperty().not())
+        );
+    }
+
+    /// FSL: switches the interface language without a restart. Every page is built again in the
+    /// new language and the launcher settings page is opened again where the user left it.
+    @FXThread
+    private static void reloadLanguage(SupportedLocale newLocale) {
+        if (decorator == null || I18n.getLocale() == newLocale) {
+            return;
+        }
+        LOG.info("Switching language to " + newLocale.getName() + " without restarting");
+        java.util.Locale.setDefault(newLocale.getLocale());
+        I18n.setLocale(newLocale);
+
+        gameInstancePage = null;
+        gameListPage = new Lazy<>(GameListPage::new);
+        rootPage = new Lazy<>(RootPage::new);
+        downloadPage = null;
+        accountListPage = new Lazy<>(Controllers::createAccountListPage);
+        settingsPage = null;
+        terracottaPage = new Lazy<>(TerracottaPage::new);
+
+        decorator.reloadContent(getRootPage());
+        bindUpdateHints();
+        navigate(getSettingsPage());
+        getSettingsPage().showLauncherSettings();
+    }
+
+    private static AccountListPage createAccountListPage() {
+        AccountListPage accountListPage = new AccountListPage();
+        accountListPage.selectedAccountProperty().bindBidirectional(Accounts.selectedAccountProperty());
+        accountListPage.accountsProperty().bindContent(Accounts.getAccounts());
+        accountListPage.authServersProperty().bindContentBidirectional(getAuthlibInjectorServers());
+        return accountListPage;
+    }
+
     /// Initializes the main application stage, scene graph, and background services.
     ///
     /// @param stage the primary application stage, which must not have been shown
@@ -243,12 +280,13 @@ public final class Controllers {
 
         decorator = new Decorator(getRootPage(), Controllers::configureMainStage);
         Scene mainScene = decorator.attachStage(stage);
-        getRootPage().getMainPage().showUpdateProperty().bind(UpdateChecker.checkingUpdateProperty().not().and(UpdateChecker.outdatedProperty()));
-        getRootPage().getMainPage().showUpdateDialogProperty().bind(
-                decorator.backableProperty().not()
-                        .and(getRootPage().getMainPage().showUpdateProperty())
-                        .and(settings().disableAutoShowUpdateDialogProperty().not())
-        );
+        bindUpdateHints();
+        // FSL: a new language applies at once, the launcher does not need to restart
+        settings().languageProperty().addListener((observable, oldLocale, newLocale) -> {
+            if (newLocale != null && newLocale != oldLocale) {
+                javafx.application.Platform.runLater(() -> reloadLanguage(newLocale));
+            }
+        });
 
         if (settings().commonDirectoryTypeProperty().get() == EnumCommonDirectory.CUSTOM &&
                 !FileUtils.canCreateDirectory(settings().getResolvedCommonDirectory())) {
@@ -535,19 +573,17 @@ public final class Controllers {
         return pane.getCompletableFuture();
     }
 
-    public static TaskExecutorDialogPane taskDialog(TaskExecutor executor, String title, @NotNull TaskCancellationAction onCancel) {
-        TaskExecutorDialogPane pane = new TaskExecutorDialogPane(onCancel);
-        pane.setTitle(title);
-        pane.setExecutor(executor);
-        dialog(pane);
-        return pane;
+    /// FSL: like PCL, tasks never block the window. They run in the background and show up in the
+    /// task button in the lower right corner; the caller starts `executor`.
+    public static void taskDialog(TaskExecutor executor, String title, @NotNull TaskCancellationAction onCancel) {
+        FslTaskCenter.track(executor, title, onCancel.isEnabled());
     }
 
-    public static TaskExecutorDialogPane taskDialog(Task<?> task, String title, @NotNull TaskCancellationAction onCancel) {
+    /// FSL: runs `task` in the background, listed in the task button in the lower right corner.
+    public static void taskDialog(Task<?> task, String title, @NotNull TaskCancellationAction onCancel) {
         TaskExecutor executor = task.executor();
-        TaskExecutorDialogPane pane = taskDialog(executor, title, onCancel);
+        taskDialog(executor, title, onCancel);
         executor.start();
-        return pane;
     }
 
     public static void navigate(Node node) {

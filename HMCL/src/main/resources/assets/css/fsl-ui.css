@@ -1182,3 +1182,64 @@
 .fsl-search-row .two-line-list-item > .first-line > .title {
     -fx-font-size: 13px;
 }
+
+/* ---------- FSL task center (PCL-style background tasks) ---------- */
+.fsl-task-button-face {
+    -fx-fill: #A78BFA;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 12, 0.2, 0, 3);
+}
+
+.fsl-task-button:hover .fsl-task-button-face {
+    -fx-fill: #C4B1FF;
+}
+
+.fsl-task-button:pressed .fsl-task-button-face {
+    -fx-fill: #8B6FE8;
+}
+
+.fsl-task-button-icon {
+    -fx-fill: #14111D;
+}
+
+.fsl-task-button-track {
+    -fx-fill: transparent;
+    -fx-stroke: rgba(20, 17, 29, 0.85);
+    -fx-stroke-width: 4;
+}
+
+.fsl-task-button-ring {
+    -fx-fill: transparent;
+    -fx-stroke: #5EEAD4;
+    -fx-stroke-width: 4;
+}
+
+.fsl-task-button-badge {
+    -fx-background-color: #FB7185;
+    -fx-background-radius: 99;
+    -fx-text-fill: white;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-padding: 0 5 0 5;
+    -fx-translate-x: 4;
+    -fx-translate-y: -4;
+}
+
+.fsl-task-big {
+    -fx-text-fill: -fsl2-text;
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+.fsl-task-percent {
+    -fx-text-fill: -fsl2-mint;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+
+.fsl-task-scroll,
+.fsl-task-scroll > .viewport {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+    -fx-padding: 0;
+}

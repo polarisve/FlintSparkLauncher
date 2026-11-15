@@ -176,7 +176,6 @@ public final class SettingsPage extends ScrollPane {
                 {
                     var chooseLanguagePane = new LineSelectButton<SupportedLocale>();
                     chooseLanguagePane.setTitle(i18n("settings.launcher.language"));
-                    chooseLanguagePane.setSubtitle(i18n("settings.take_effect_after_restart"));
 
                     SupportedLocale currentLocale = I18n.getLocale();
                     chooseLanguagePane.setNullSafeConverter(locale -> {

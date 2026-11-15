@@ -94,6 +94,11 @@ public class LauncherSettingsPage extends DecoratorAnimatedPage implements Decor
         tab.select(gameTab, false);
     }
 
+    /// FSL: opens the launcher settings tab (where the language is chosen).
+    public void showLauncherSettings() {
+        tab.select(settingsTab, false);
+    }
+
     public void showFeedback() {
         tab.select(feedbackTab, false);
     }

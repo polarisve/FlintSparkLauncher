@@ -69,6 +69,20 @@ public class Navigator extends TransitionPane {
         }
     }
 
+    /// FSL: replaces the root page, closing every page above it. Used to rebuild the interface
+    /// after the language changes.
+    public void reset(Node root) {
+        FXUtils.checkFxUserThread();
+        clear();
+        if (!stack.isEmpty()) {
+            Node old = stack.pop();
+            old.fireEvent(new NavigationEvent(this, old, Navigation.NavigationDirection.PREVIOUS, NavigationEvent.EXITED));
+            if (old instanceof PageAware pageAware) pageAware.onPageHidden();
+        }
+        initialized = false;
+        init(root);
+    }
+
     public void navigate(Node node, AnimationProducer animationProducer) {
         navigate(node, animationProducer, Motion.SHORT4, Motion.EASE);
     }

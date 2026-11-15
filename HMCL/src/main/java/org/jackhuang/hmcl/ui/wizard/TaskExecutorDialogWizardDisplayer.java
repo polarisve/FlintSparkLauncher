@@ -22,9 +22,8 @@ import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.task.TaskExecutor;
 import org.jackhuang.hmcl.task.TaskListener;
 import org.jackhuang.hmcl.ui.Controllers;
-import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
-import org.jackhuang.hmcl.ui.construct.TaskExecutorDialogPane;
+import org.jackhuang.hmcl.ui.fsl.FslTaskCenter;
 import org.jackhuang.hmcl.util.SettingsMap;
 import org.jackhuang.hmcl.util.StringUtils;
 import org.jetbrains.annotations.Nullable;
@@ -41,28 +40,25 @@ public abstract class TaskExecutorDialogWizardDisplayer extends AbstractWizardDi
         super(cancelQueue);
     }
 
+    /// FSL: called right after the task went to the background; closes the wizard page.
+    protected void onTaskStarted() {
+    }
+
     /// Displays a task and releases its optional resources after execution stops.
     @Override
     public void handleTask(SettingsMap settings, Task<?> task) {
         @Nullable WizardProvider.TaskCleanup cleanup = settings.remove(WizardProvider.TaskCleanup.KEY);
-        TaskExecutorDialogPane pane = new TaskExecutorDialogPane(it -> {
-            if (cleanup != null) {
-                // Keep the installation modal until onStop has released its repository draft.
-                it.setCancel(null);
-                return;
-            }
-            it.fireEvent(new DialogCloseEvent());
-            onEnd();
-        });
-
-        pane.setTitle(i18n("message.doing"));
+        // FSL: like PCL, the installation runs in the task button in the lower right corner; the
+        // wizard closes at once so the rest of the launcher stays usable.
+        String title = i18n("message.doing");
         if (settings.containsKey("title")) {
-            Object title = settings.get("title");
-            if (title instanceof StringProperty titleProperty)
-                pane.titleProperty().bind(titleProperty);
-            else if (title instanceof String titleMessage)
-                pane.setTitle(titleMessage);
+            Object titleValue = settings.get("title");
+            if (titleValue instanceof StringProperty titleProperty && titleProperty.get() != null)
+                title = titleProperty.get();
+            else if (titleValue instanceof String titleMessage)
+                title = titleMessage;
         }
+        String taskTitle = title;
 
         runInFX(() -> {
             TaskExecutor executor = task.executor(new TaskListener() {
@@ -83,10 +79,7 @@ public abstract class TaskExecutorDialogWizardDisplayer extends AbstractWizardDi
                     @Nullable Exception completedFailure = failure;
                     runInFX(() -> {
                         if (success && completedFailure == null) {
-                            if (settings.get("success_message") instanceof String successMessage)
-                                Controllers.dialog(successMessage, null, MessageType.SUCCESS, () -> onEnd());
-                            else if (!settings.containsKey("forbid_success_message"))
-                                Controllers.dialog(i18n("message.success"), null, MessageType.SUCCESS, () -> onEnd());
+                            onEnd();
                         } else {
                             if (completedFailure == null) {
                                 onEnd();
@@ -119,9 +112,9 @@ public abstract class TaskExecutorDialogWizardDisplayer extends AbstractWizardDi
                     });
                 }
             });
-            pane.setExecutor(executor);
-            Controllers.dialog(pane);
+            FslTaskCenter.track(executor, taskTitle, true);
             executor.start();
+            onTaskStarted();
         });
     }
 }

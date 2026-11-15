@@ -342,6 +342,15 @@ public final class Decorator {
         return mainWindowPane;
     }
 
+    /// FSL: swaps in a freshly built root page and rebuilds the title bar, so a language change
+    /// takes effect at once without restarting the launcher.
+    ///
+    /// @param mainPage the new root page
+    public void reloadContent(Node mainPage) {
+        mainWindowPane.reloadTexts();
+        navigator.reset(mainPage);
+    }
+
     /// Returns the navigation stack rendered by the main window.
     ///
     /// @return this decorator's navigator
