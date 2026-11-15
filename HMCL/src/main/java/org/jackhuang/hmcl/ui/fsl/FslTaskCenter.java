@@ -152,6 +152,7 @@ public final class FslTaskCenter {
             public void onStop(boolean success, TaskExecutor executor) {
                 Platform.runLater(() -> {
                     ENTRIES.remove(entry);
+                    if (Controllers.isStopped()) return;
                     updateTotal();
                     if (success) {
                         Controllers.showToast(i18n("fsl.task.done", title));
@@ -165,7 +166,7 @@ public final class FslTaskCenter {
         entry.progress.addListener(o -> updateTotal());
         ENTRIES.add(entry);
         updateTotal();
-        Controllers.showToast(i18n("fsl.task.started", title));
+        if (!Controllers.isStopped()) Controllers.showToast(i18n("fsl.task.started", title));
     }
 
     private static void updateTotal() {

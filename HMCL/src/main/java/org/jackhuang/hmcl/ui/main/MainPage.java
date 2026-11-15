@@ -342,7 +342,13 @@ public final class MainPage extends StackPane implements DecoratorPage {
         StackPane.setMargin(side, new Insets(-20, 0, -20, -20));
         StackPane.setMargin(hero, new Insets(0, 0, 0, 236));
 
-        getChildren().addAll(side, hero, updatePane);
+        // FSL: while a game launches the left column shows the launch card, like PCL
+        Region sideColumn = (Region) org.jackhuang.hmcl.ui.fsl.FslLaunchCard.wrap(side);
+        StackPane.setAlignment(sideColumn, Pos.CENTER_LEFT);
+        StackPane.setMargin(sideColumn, StackPane.getMargin(side));
+        StackPane.setMargin(side, null);
+        FXUtils.setLimitWidth(sideColumn, 240);
+        getChildren().addAll(sideColumn, hero, updatePane);
 
     }
 

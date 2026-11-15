@@ -325,8 +325,13 @@ public final class LauncherHelper {
                         new Task.StagesHint("launch.state.waiting_launching"))
                 .executor();
         launchingStepsPane.setExecutor(executor, false);
-        // FSL: launching runs in the task button in the lower right corner, like PCL, instead of a blocking dialog
-        org.jackhuang.hmcl.ui.fsl.FslTaskCenter.track(executor, i18n("instance.launch") + " - " + gameInstance.getId(), true);
+        // FSL: like PCL, launching shows the launch card on the home page instead of a blocking dialog
+        if (scriptFile == null) {
+            org.jackhuang.hmcl.ui.FXUtils.runInFX(() -> {
+                Controllers.getDecorator().goHome();
+                org.jackhuang.hmcl.ui.fsl.FslLaunchCard.track(executor, String.valueOf(gameInstance.getId()));
+            });
+        }
         executor.addTaskListener(new TaskListener() {
 
             @Override
