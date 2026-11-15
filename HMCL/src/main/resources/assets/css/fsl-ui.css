@@ -1243,3 +1243,15 @@
     -fx-background: transparent;
     -fx-padding: 0;
 }
+
+/* ---------- FSL launch card (home page, PCL-style launching) ---------- */
+.fsl-launch-card {
+    -fx-padding: 16;
+    -fx-spacing: 10;
+}
+
+.fsl-launch-name {
+    -fx-text-fill: -fsl2-text;
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}

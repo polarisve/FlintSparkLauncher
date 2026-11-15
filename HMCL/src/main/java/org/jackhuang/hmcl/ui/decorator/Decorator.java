@@ -351,6 +351,11 @@ public final class Decorator {
         navigator.reset(mainPage);
     }
 
+    /// FSL: closes every page above the home page.
+    public void goHome() {
+        navigator.clear();
+    }
+
     /// Returns the navigation stack rendered by the main window.
     ///
     /// @return this decorator's navigator
