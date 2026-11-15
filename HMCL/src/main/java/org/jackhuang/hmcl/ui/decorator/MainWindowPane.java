@@ -21,6 +21,7 @@ import org.jackhuang.hmcl.ui.construct.Navigator;
 import org.jackhuang.hmcl.ui.fsl.FslNavigationTabs;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 import org.jackhuang.hmcl.ui.fsl.ds.FslTopBar;
+import org.jackhuang.hmcl.ui.fsl.ds.FslTabs;
 import org.jackhuang.hmcl.ui.fsl.FslSearchPage;
 import org.jackhuang.hmcl.ui.fsl.FslTaskCenter;
 
@@ -151,10 +152,12 @@ final class MainWindowPane extends StackPane {
                         // FSL: long labels (German, Ukrainian...) used to push the tabs over the logo and
                         // page title. Without room for the labels, show only the icons. The decision uses
                         // the full width, which does not change with compact mode, so it never flips.
-                        double free = getWidth() - snappedLeftInset() - snappedRightInset()
-                                - navigationTabs.fullWidth() - titleRight.prefWidth(-1);
-                        boolean compact = free < MIN_TITLE_ROOM;
-                        Platform.runLater(() -> navigationTabs.setCompact(compact));
+                        double room0 = getWidth() - snappedLeftInset() - snappedRightInset() - titleRight.prefWidth(-1);
+                        FslTabs.Mode mode =
+                                room0 - navigationTabs.widthFor(FslTabs.Mode.FULL) >= MIN_TITLE_ROOM ? FslTabs.Mode.FULL
+                                        : room0 - navigationTabs.widthFor(FslTabs.Mode.TEXT) >= MIN_TITLE_ROOM ? FslTabs.Mode.TEXT
+                                        : FslTabs.Mode.ICON;
+                        Platform.runLater(() -> navigationTabs.setMode(mode));
                     }
                     double room = Math.max(0, getWidth() - snappedLeftInset() - snappedRightInset()
                             - titleTabs.prefWidth(-1) - titleRight.prefWidth(-1));
