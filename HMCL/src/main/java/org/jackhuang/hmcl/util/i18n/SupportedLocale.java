@@ -64,6 +64,13 @@ public final class SupportedLocale {
                 LOG.warning("Failed to load languages.json", e);
             }
         }
+        // FSL: English right below "system default", above every other language
+        for (int i = 2; i < list.size(); i++) {
+            if ("en".equals(list.get(i).getName())) {
+                list.add(1, list.remove(i));
+                break;
+            }
+        }
         return List.copyOf(list);
     }
 
