@@ -661,6 +661,14 @@ public class DefaultLauncher extends Launcher {
         return Path.of(options.getNativesDir());
     }
 
+    /// FSL: called at the boundaries of the phases inside [#launch()], so that callers can
+    /// report PCL's 解压文件 / 执行自定义命令 / 启动进程 steps truthfully instead of guessing
+    /// them from the outside. Does nothing by default.
+    ///
+    /// @param phase one of {@code natives}, {@code custom}, {@code process}
+    protected void onLaunchPhase(String phase) {
+    }
+
     @Override
     public ManagedProcess launch() throws IOException, InterruptedException {
         Path nativeFolder = getNativeFolder();
@@ -679,6 +687,7 @@ public class DefaultLauncher extends Launcher {
             throw new IllegalStateException("Illegal command line " + rawCommandLine);
         }
 
+        onLaunchPhase("natives");
         if (!options.isUseCustomNatives()) {
             decompressNatives(command.javaNativeFolder);
         }
@@ -688,6 +697,8 @@ public class DefaultLauncher extends Launcher {
 
         Path runDirectory = instance.getRunDirectory();
 
+        onLaunchPhase("prerun");
+        onLaunchPhase("custom");
         if (StringUtils.isNotBlank(options.getPreLaunchCommand())) {
             ProcessBuilder builder = new ProcessBuilder(StringUtils.tokenize(options.getPreLaunchCommand(), getEnvVars(nativeFolder))).directory(runDirectory.toFile());
             builder.environment().putAll(getEnvVars(nativeFolder));
@@ -696,6 +707,7 @@ public class DefaultLauncher extends Launcher {
 
         Process process;
         try {
+            onLaunchPhase("process");
             ProcessBuilder builder = new ProcessBuilder(rawCommandLine).directory(runDirectory.toFile());
             if (listener == null) {
                 builder.inheritIO();

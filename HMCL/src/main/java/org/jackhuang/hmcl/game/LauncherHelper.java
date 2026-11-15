@@ -37,6 +37,7 @@ import org.jackhuang.hmcl.setting.JavaVersionType;
 import org.jackhuang.hmcl.setting.LauncherVisibility;
 import org.jackhuang.hmcl.task.*;
 import org.jackhuang.hmcl.ui.*;
+import org.jackhuang.hmcl.ui.fsl.FslLaunchCard;
 import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane;
@@ -212,7 +213,11 @@ public final class LauncherHelper {
                             })
                     );
                 }).withStage("launch.state.dependencies")
-                .thenComposeAsync(() -> new GameVerificationFixTask(gameInstance, gameInstance.getVersion(), launchManifest.get()))
+                // FSL: PCL's 补全文件 loader — the verification/fix pass is exactly that step
+                .thenComposeAsync(() -> {
+                    FslLaunchCard.enter(FslLaunchCard.LaunchStep.FIX_FILES);
+                    return new GameVerificationFixTask(gameInstance, gameInstance.getVersion(), launchManifest.get());
+                })
                 .thenComposeAsync(() -> {
                     if (setting.getInheritable(GameSettings::allowAutoAgentProperty)
                             || setting.getInheritable(GameSettings::noJVMOptionsProperty)
@@ -236,7 +241,10 @@ public final class LauncherHelper {
                     }
                 })
                 .thenComposeAsync(() -> logIn(account).withStage("launch.state.logging_in"))
+                // FSL: PCL's 内存优化 loader, done on the launcher heap before the arguments are built
+                .thenComposeAsync(authInfo -> memoryOptimize().thenApplyAsync(ignored -> authInfo))
                 .thenComposeAsync(authInfo -> Task.supplyAsync(() -> {
+                    FslLaunchCard.enter(FslLaunchCard.LaunchStep.ARGUMENTS);
                     LaunchOptions.Builder launchOptionsBuilder = gameInstance.getLaunchOptions(
                             javaVersionRef.get(), repository.getBaseDirectory(), javaAgents, javaArguments, scriptFile != null);
                     if (disableOfflineSkin) {
@@ -299,6 +307,8 @@ public final class LauncherHelper {
                         });
                     }
                 }).thenAcceptAsync(process -> { // process is LaunchTask's result
+                    // FSL: PCL's 等待游戏窗口出现 loader — the process is up, the window is pending
+                    FslLaunchCard.enter(FslLaunchCard.LaunchStep.WINDOW);
                     if (scriptFile == null) {
                         PROCESSES.add(new WeakReference<>(process));
                         if (launcherVisibility == LauncherVisibility.CLOSE)
@@ -839,6 +849,33 @@ public final class LauncherHelper {
         }
     }
 
+    /// PCL's 内存优化 loader (`McLaunchMemoryOptimize`): it runs on the launcher before the game
+    /// arguments are built, wakes up every 100 ms and advances the progress bar itself.
+    /// FSL keeps the same step, pace and reported progress; it only trims what it owns (the
+    /// launcher heap) instead of poking at unrelated processes.
+    private Task<Void> memoryOptimize() {
+        return Task.supplyAsync(() -> {
+            FslLaunchCard.enter(FslLaunchCard.LaunchStep.MEMORY);
+
+            Runtime runtime = Runtime.getRuntime();
+            long max = runtime.maxMemory();
+            long used = max - runtime.freeMemory();
+            int ticks = Math.min(60, Math.max(4, (int) (used / (64L << 20))));
+            for (int i = 0; i < ticks; i++) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+                FslLaunchCard.tick();
+            }
+
+            LOG.info("Memory optimize: launcher heap max=%d MiB, used=%d MiB".formatted(max >> 20, used >> 20));
+            return null;
+        });
+    }
+
     /// The managed process listener.
     /// Guarantee that one Java [Process], one [HMCLProcessListener].
     /// Because every time we launched a game, we generates a new [HMCLProcessListener]
@@ -1003,6 +1040,8 @@ public final class LauncherHelper {
                     try {
                         if (!lwjgl) {
                             lwjgl = true;
+                            // FSL: PCL's 结束处理 loader — the game window is ready, the launch is wrapped up
+                            FslLaunchCard.enter(FslLaunchCard.LaunchStep.END);
                             finishLaunch();
                         }
                     } finally {

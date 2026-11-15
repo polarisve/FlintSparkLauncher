@@ -205,9 +205,12 @@
     -fx-opacity: 0.45;
 }
 
+/* Keyboard focus must not leave a permanent ring: after a mouse click the button keeps
+   the focus (e.g. the home page "实例设置" button that opens a settings window), which used
+   to paint a 2 px primary border forever. The border follows hover only. */
 .fsl-btn:focused {
-    -fx-border-color: -fsl2-primary-hover;
-    -fx-border-width: 2;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
 }
 
 /* ---------- Cards and text ---------- */
@@ -1245,13 +1248,15 @@
 }
 
 /* ---------- FSL launch card (home page, PCL-style launching) ---------- */
-.fsl-launch-card {
-    -fx-padding: 16;
-    -fx-spacing: 10;
+.fsl-launch-view {
+    -fx-padding: 0;
+    -fx-spacing: 0;
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
 }
 
 .fsl-launch-name {
     -fx-text-fill: -fsl2-text;
-    -fx-font-size: 20px;
-    -fx-font-weight: bold;
+    -fx-font-size: 13.5px;
+    -fx-font-weight: normal;
 }
