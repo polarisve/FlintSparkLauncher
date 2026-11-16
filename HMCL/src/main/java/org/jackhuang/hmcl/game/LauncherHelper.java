@@ -458,10 +458,61 @@ public final class LauncherHelper {
         Task<JavaRuntime> task;
         JavaVersionType javaVersionType = setting.getInheritable(GameSettings::javaTypeProperty);
         if (setting.getInheritable(GameSettings::notCheckJVMProperty)) {
-            task = getJavaTask.thenApplyAsync(java -> Lang.requireNonNullElse(java, JavaRuntime.getDefault()));
+            task = getJavaTask.thenComposeAsync(java -> {
+                @Nullable JavaRuntime actual = Lang.requireNonNullElse(java, JavaRuntime.getDefault());
+
+                // Skipping the JVM argument checks must not bypass the major version declared by the
+                // version JSON. Modern version JSONs pass options such as --enable-native-access that
+                // older runtimes reject with "Unrecognized option", killing the JVM before the game
+                // starts, so such a runtime can never work for this instance.
+                @Nullable GameJavaVersion declaredJavaVersion = manifest.javaVersion();
+                if (actual != null && isJavaVersionAcceptable(actual, manifest))
+                    return Task.completed(actual);
+
+                JavaRuntime suitable = JavaManager.findSuitableJava(gameVersion, manifest);
+                if (suitable != null) {
+                    LOG.info("Use Java " + suitable.getVersion() + " instead of the currently selected runtime"
+                            + (actual != null ? " " + actual.getVersion() : ""));
+                    return Task.completed(suitable);
+                }
+
+                // No installed runtime can start this instance. Fetch the runtime its version JSON
+                // declares instead of failing and leaving the user to install a JDK by hand.
+                if (declaredJavaVersion != null) {
+                    CompletableFuture<JavaRuntime> future = new CompletableFuture<>();
+                    downloadJava(declaredJavaVersion, gameInstance.getRepository())
+                            .whenCompleteAsync((downloadedJava, throwable) -> {
+                                if (throwable == null) {
+                                    future.complete(downloadedJava);
+                                } else {
+                                    LOG.warning("Failed to download Java " + declaredJavaVersion.majorVersion(), throwable);
+                                    // Report the failure instead of cancelling the launch without any hint.
+                                    FXUtils.runInFX(() -> Controllers.dialog(
+                                            i18n("launch.failed.no_accepted_java"),
+                                            i18n("message.error"),
+                                            MessageType.ERROR));
+                                    future.completeExceptionally(new CancellationException("Java version too low"));
+                                }
+                            }, Schedulers.javafx());
+                    return Task.fromCompletableFuture(future);
+                }
+
+                LOG.warning("No installed Java runtime can start this instance and its version JSON declares"
+                        + " no Java version to download");
+                CompletableFuture<JavaRuntime> failed = new CompletableFuture<>();
+                FXUtils.runInFX(() -> Controllers.dialog(
+                        i18n("launch.failed.no_accepted_java"),
+                        i18n("message.error"),
+                        MessageType.ERROR));
+                failed.completeExceptionally(new CancellationException("No accepted java"));
+                return Task.fromCompletableFuture(failed);
+            });
         } else if (javaVersionType == JavaVersionType.AUTO || javaVersionType == JavaVersionType.VERSION) {
             task = getJavaTask.thenComposeAsync(Schedulers.javafx(), java -> {
-                if (java != null) {
+                // A pinned or detected runtime must still be able to start this instance: a runtime
+                // older than the major version declared by the version JSON aborts the JVM before the
+                // game starts, so keep resolving (and downloading if necessary).
+                if (java != null && isJavaVersionAcceptable(java, manifest)) {
                     return Task.completed(java);
                 }
 
@@ -509,6 +560,9 @@ public final class LauncherHelper {
 
                     if (targetJavaVersion == null)
                         targetJavaVersion = manifest.javaVersion();
+
+                    if (targetJavaVersion == null)
+                        targetJavaVersion = GameJavaVersion.getMinimumJavaVersion(gameVersion);
                 }
 
                 if (targetJavaVersion != null && supportedVersions.contains(targetJavaVersion)) {
@@ -518,15 +572,11 @@ public final class LauncherHelper {
                                     future.complete(downloadedJava);
                                 } else {
                                     LOG.warning("Failed to download java", exception);
-                                    Controllers.confirm(i18n("launch.failed.no_accepted_java"), i18n("message.warning"), MessageType.WARNING,
-                                            () -> future.complete(JavaRuntime.getDefault()),
-                                            breakAction);
+                                    completeWithInstalledJava(future, manifest, breakAction);
                                 }
                             }, Schedulers.javafx());
                 } else {
-                    Controllers.confirm(i18n("launch.failed.no_accepted_java"), i18n("message.warning"), MessageType.WARNING,
-                            () -> future.complete(JavaRuntime.getDefault()),
-                            breakAction);
+                    completeWithInstalledJava(future, manifest, breakAction);
                 }
 
                 return result;
@@ -554,17 +604,45 @@ public final class LauncherHelper {
                 Task<JavaRuntime> result = Task.fromCompletableFuture(future);
                 Runnable breakAction = () -> future.completeExceptionally(new CancellationException("Launch operation was cancelled by user"));
 
+                // A runtime below the major version declared by the version JSON can never launch the
+                // instance: the JSON passes options such as --enable-native-access that the runtime
+                // rejects. Treat it as a violated mandatory constraint so the repair branches below
+                // pick or download a usable runtime instead of starting a doomed process.
+                @Nullable GameJavaVersion declaredJavaVersion = manifest.javaVersion();
+                if (java != null && declaredJavaVersion != null && java.getParsedVersion() < declaredJavaVersion.majorVersion()) {
+                    LOG.warning("Selected Java " + java.getVersion() + " is older than the Java "
+                            + declaredJavaVersion.majorVersion() + " required by this instance");
+                    violatedMandatoryConstraints.add(JavaVersionConstraint.GAME_JSON);
+                }
+
                 if (java == null || !violatedMandatoryConstraints.isEmpty()) {
                     JavaRuntime suggestedJava = JavaManager.findSuitableJava(gameVersion, manifest);
                     if (suggestedJava != null) {
-                        FXUtils.runInFX(() -> {
-                            Controllers.confirm(i18n("launch.advice.java.auto"), i18n("message.warning"), () -> {
-                                setting.setJavaAutoSelected();
-                                future.complete(suggestedJava);
-                            }, breakAction);
-                        });
+                        // Never ask the user to pick a Java runtime: switch to automatic selection and
+                        // continue with the runtime that actually satisfies this instance.
+                        LOG.info("Switching to automatically selected Java " + suggestedJava.getVersion());
+                        setting.setJavaAutoSelected();
+                        future.complete(suggestedJava);
                         return result;
                     } else if (java == null) {
+                        // Nothing installed satisfies this instance. Download the runtime declared by the
+                        // version JSON so the launcher keeps working without any manual Java setup.
+                        GameJavaVersion requiredJavaVersion = resolveRequiredJavaVersion(gameVersion, manifest, analyzer);
+                        if (requiredJavaVersion != null
+                                && GameJavaVersion.getSupportedVersions(SYSTEM_PLATFORM).contains(requiredJavaVersion)) {
+                            downloadJava(requiredJavaVersion, gameInstance.getRepository())
+                                    .whenCompleteAsync((downloadedJava, throwable) -> {
+                                        if (throwable == null) {
+                                            setting.setJavaAutoSelected();
+                                            future.complete(downloadedJava);
+                                        } else {
+                                            LOG.warning("Failed to download Java " + requiredJavaVersion.majorVersion(), throwable);
+                                            breakAction.run();
+                                        }
+                                    }, Schedulers.javafx());
+                            return result;
+                        }
+
                         FXUtils.runInFX(() -> Controllers.dialog(
                                 i18n("launch.invalid_java"),
                                 i18n("message.error"),
@@ -744,6 +822,55 @@ public final class LauncherHelper {
         }
 
         return task.withStage("launch.state.java");
+    }
+
+    /// Last-resort runtime choice used when nothing could be resolved or installed.
+    ///
+    /// The runtime JVM runs on is only accepted when it satisfies the Java version declared by the
+    /// version JSON; otherwise the launch is cancelled with an explicit error instead of starting a
+    /// JVM that aborts immediately with "Unrecognized option".
+    private static void completeWithInstalledJava(CompletableFuture<JavaRuntime> future,
+                                                  GameInstanceManifest manifest,
+                                                  Runnable breakAction) {
+        @Nullable JavaRuntime defaultJava = JavaRuntime.getDefault();
+        if (defaultJava != null && isJavaVersionAcceptable(defaultJava, manifest)) {
+            future.complete(defaultJava);
+            return;
+        }
+
+        LOG.warning("No installed Java runtime can start this instance: refusing to fall back to "
+                + (defaultJava != null ? defaultJava.getVersion() : "no runtime at all"));
+        FXUtils.runInFX(() -> Controllers.dialog(
+                i18n("launch.failed.no_accepted_java"),
+                i18n("message.error"),
+                MessageType.ERROR,
+                breakAction));
+    }
+
+    /// Returns the Java major version this instance declares, falling back to the version implied by the
+    /// game version when the version JSON carries no `javaVersion` field.
+    private static @Nullable GameJavaVersion resolveRequiredJavaVersion(
+            GameVersionNumber gameVersion, GameInstanceManifest manifest, GameComponentAnalyzer analyzer) {
+        @Nullable GameJavaVersion declaredJavaVersion = manifest.javaVersion();
+        if (declaredJavaVersion != null)
+            return declaredJavaVersion;
+
+        if (gameVersion != null && gameVersion.compareTo("1.12.2") == 0) {
+            @Nullable String cleanroomVersion = analyzer.getVersion(GameComponentType.CLEANROOM);
+            if (cleanroomVersion != null) {
+                @Nullable GameJavaVersion cleanroomJavaVersion = GameJavaVersion.getCleanroomJavaVersion(cleanroomVersion);
+                if (cleanroomJavaVersion != null)
+                    return cleanroomJavaVersion;
+            }
+        }
+
+        return gameVersion != null ? GameJavaVersion.getMinimumJavaVersion(gameVersion) : null;
+    }
+
+    /// Returns whether the given runtime is new enough to start the instance described by the manifest.
+    private static boolean isJavaVersionAcceptable(JavaRuntime java, GameInstanceManifest manifest) {
+        @Nullable GameJavaVersion declaredJavaVersion = manifest.javaVersion();
+        return declaredJavaVersion == null || java.getParsedVersion() >= declaredJavaVersion.majorVersion();
     }
 
     private static CompletableFuture<JavaRuntime> downloadJava(GameJavaVersion javaVersion, HMCLGameRepository repository) {

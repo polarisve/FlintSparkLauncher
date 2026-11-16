@@ -42,12 +42,16 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 
 import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
-public record RemoteVersion(UpdateChannel channel, String version, List<String> urls, Type type, IntegrityCheck integrityCheck,
+public record RemoteVersion(UpdateChannel channel, String version, List<String> urls, Type type, @Nullable IntegrityCheck integrityCheck,
                             boolean preview, boolean force, @Nullable String changelog, @Nullable String page,
                             String source) {
+
+    /// FSL: what a real SHA-1 looks like; anything else is a placeholder.
+    private static final Pattern SHA1_PATTERN = Pattern.compile("[0-9a-fA-F]{40}");
 
     /// FSL: asks every source (Gitee and GitHub) at the same time on each check.
     /// The newest version found wins; download URLs from every source that offers
@@ -91,7 +95,7 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
         }
         List<String> urls = new ArrayList<>(newest.urls());
         for (RemoteVersion v : found) {
-            if (v.version().equals(newest.version()) && v.integrityCheck().equals(newest.integrityCheck())) {
+            if (v.version().equals(newest.version()) && Objects.equals(v.integrityCheck(), newest.integrityCheck())) {
                 for (String u : v.urls()) {
                     if (!urls.contains(u)) urls.add(u);
                 }
@@ -227,11 +231,18 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
             String version = Optional.ofNullable(response.get("version")).map(JsonElement::getAsString).orElseThrow(() -> new IOException("version is missing"));
             String jarUrl = Optional.ofNullable(response.get("jar")).map(JsonElement::getAsString).orElse(null);
             String jarHash = Optional.ofNullable(response.get("jarsha1")).map(JsonElement::getAsString).orElse(null);
+            // FSL: a sha1 that is empty, all zeros or not 40 hex chars is a placeholder left behind by an
+            // old release script. Treating it as a real checksum made every download end in
+            // ChecksumMismatchException, so such a value is downgraded to "no checksum" instead.
+            if (jarHash != null && !isUsableSha1(jarHash)) {
+                LOG.warning("Ignoring malformed jarsha1 '" + jarHash + "' from " + source);
+                jarHash = null;
+            }
             boolean force = Optional.ofNullable(response.get("force")).map(JsonElement::getAsBoolean).orElse(false);
             // FSL: release notes and release page are carried in the update JSON itself
             String changelog = Optional.ofNullable(response.get("changelog")).map(JsonElement::getAsString).orElse(null);
             String page = Optional.ofNullable(response.get("page")).map(JsonElement::getAsString).orElse(null);
-            if (jarUrl != null && jarHash != null) {
+            if (jarUrl != null) {
                 // FSL: "mirrors" lists other download URLs for the same jar
                 List<String> urls = new ArrayList<>();
                 urls.add(jarUrl);
@@ -242,13 +253,23 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
                         if (!urls.contains(m)) urls.add(m);
                     }
                 }
-                return new RemoteVersion(channel, version, List.copyOf(urls), Type.JAR, new IntegrityCheck("SHA-1", jarHash.toLowerCase(Locale.ROOT)), preview, force, changelog, page, source);
+                IntegrityCheck check = jarHash == null ? null
+                        : new IntegrityCheck("SHA-1", jarHash.toLowerCase(Locale.ROOT));
+                return new RemoteVersion(channel, version, List.copyOf(urls), Type.JAR, check, preview, force, changelog, page, source);
             } else {
                 throw new IOException("No download url is available");
             }
         } catch (JsonParseException | IllegalStateException | UnsupportedOperationException e) {
             throw new IOException("Malformed response", e);
         }
+    }
+
+    /// FSL: SHA-1 values that actually carry information, as opposed to release-script placeholders.
+    private static boolean isUsableSha1(String hash) {
+        if (!SHA1_PATTERN.matcher(hash).matches()) {
+            return false;
+        }
+        return !hash.chars().allMatch(c -> c == '0');
     }
 
     @Override

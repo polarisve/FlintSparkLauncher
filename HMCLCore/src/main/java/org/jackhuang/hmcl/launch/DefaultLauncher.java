@@ -21,6 +21,7 @@ import org.glavo.uuid.UUIDs;
 import org.jackhuang.hmcl.addon.mod.ModLoaderType;
 import org.jackhuang.hmcl.auth.AuthInfo;
 import org.jackhuang.hmcl.game.*;
+import org.jackhuang.hmcl.util.CacheRepository;
 import org.jackhuang.hmcl.util.Lang;
 import org.jackhuang.hmcl.util.ServerAddress;
 import org.jackhuang.hmcl.util.StringUtils;
@@ -57,7 +58,44 @@ public class DefaultLauncher extends Launcher {
         super(instance, manifest, authInfo, options, listener, daemon);
     }
 
+    /// Asserts that the client JAR referenced by the launch command line exists before launching.
+    ///
+    /// When a version directory carries only a manifest (for example an externally imported version),
+    /// the client JAR may still be absent at launch time. The JVM silently ignores a missing classpath
+    /// entry, so the game process dies with `ClassNotFoundException: net.minecraft.client.main.Main`
+    /// instead of reporting a missing client. This method materializes the JAR from the
+    /// content-addressed cache synchronously before the command line is generated.
+    ///
+    /// @param instance the instance whose client JAR is used by this launch
+    /// @param manifest the resolved manifest supplying the client download metadata
+    /// @return the existing or freshly materialized client JAR
+    /// @throws IOException if the JAR is missing and cannot be restored from the cache
+    private static Path requireClientJar(GameInstance instance, GameInstanceManifest manifest) throws IOException {
+        Path clientJar = instance.getInstanceJarFile();
+        if (Files.isRegularFile(clientJar) && Files.size(clientJar) > 0L) {
+            return clientJar;
+        }
+
+        @Nullable String sha1 = manifest.getDownloadInfo().getSha1();
+        if (sha1 != null) {
+            Optional<Path> cached = CacheRepository.getInstance()
+                    .checkExistentFile(null, CacheRepository.SHA1, sha1);
+            if (cached.isPresent() && Files.isRegularFile(cached.get())) {
+                FileUtils.copyFile(cached.get(), clientJar);
+                if (Files.isRegularFile(clientJar) && Files.size(clientJar) > 0L) {
+                    LOG.warning("Client JAR was missing, restored from cache: " + clientJar);
+                    return clientJar;
+                }
+            }
+        }
+
+        throw new IOException("Minecraft client JAR is missing: " + clientJar);
+    }
+
     private Command generateCommandLine(Path nativeFolder) throws IOException {
+        // Fail fast here rather than launching with a classpath entry the JVM will silently ignore.
+        Path clientJar = requireClientJar(instance, manifest);
+
         CommandBuilder res = new CommandBuilder();
 
         switch (options.getProcessPriority()) {
@@ -115,7 +153,8 @@ public class DefaultLauncher extends Launcher {
             else
                 res.addDefault("-XX:MetaspaceSize=", options.getMetaspace() + "m");
 
-        res.addAllDefaultWithoutParsing(options.getJavaArguments());
+        res.addAllDefaultWithoutParsing(filterIncompatibleJvmArguments(
+                options.getJavaArguments(), options.getJava().getParsedVersion()));
 
         Charset encoding = OperatingSystem.NATIVE_CHARSET;
         String fileEncoding = res.addDefault("-Dfile.encoding=", encoding.name());
@@ -148,8 +187,6 @@ public class DefaultLauncher extends Launcher {
         // Default JVM Args
         if (!options.isNoGeneratedJVMArgs()) {
             appendJvmArgs(res);
-
-            Path clientJar = instance.getInstanceJarFile();
 
             res.addDefault("-Dminecraft.client.jar=", FileUtils.getAbsolutePath(clientJar));
 
@@ -444,6 +481,63 @@ public class DefaultLauncher extends Launcher {
 
     protected List<Argument> getDefaultGameArguments() {
         return Arguments.DEFAULT_GAME_ARGUMENTS;
+    }
+
+    /// Drops JVM options that the selected runtime cannot parse.
+    ///
+    /// Version JSONs written for modern Java may carry options such as `--enable-native-access`,
+    /// `--add-exports` or `--sun-misc-unsafe-memory-access`. Handing them to an older runtime makes
+    /// the JVM abort with "Unrecognized option" and "Could not create the Java Virtual Machine"
+    /// before the game starts, which hides the actual cause (a runtime below the version required by
+    /// the version JSON). Filtering them lets the game report a readable error instead.
+    ///
+    /// @param args        the JVM arguments requested by the version JSON and the user setting
+    /// @param javaVersion the major version of the selected runtime
+    /// @return the arguments accepted by the runtime, in the original order
+    private static List<String> filterIncompatibleJvmArguments(@Nullable Collection<String> args, int javaVersion) {
+        if (args == null || args.isEmpty())
+            return Collections.emptyList();
+
+        List<String> filtered = new ArrayList<>(args.size());
+        for (@Nullable String arg : args) {
+            if (arg == null)
+                continue;
+
+            String name = arg;
+            int index = name.indexOf('=');
+            if (index > 0)
+                name = name.substring(0, index);
+
+            boolean accepted;
+            switch (name) {
+                case "--add-exports", "--add-opens", "--add-reads", "--add-modules", "--module-path", "-p":
+                    accepted = javaVersion >= 9;
+                    break;
+                case "--enable-preview":
+                    accepted = javaVersion >= 12;
+                    break;
+                case "--illegal-access":
+                    accepted = javaVersion >= 9 && javaVersion <= 16;
+                    break;
+                case "--enable-native-access":
+                    // Added in JDK 22 (JEP 454). JDK 17-21 abort with "Unrecognized option".
+                    accepted = javaVersion >= 22;
+                    break;
+                case "--sun-misc-unsafe-memory-access":
+                    accepted = javaVersion >= 24;
+                    break;
+                default:
+                    accepted = true;
+                    break;
+            }
+
+            if (accepted) {
+                filtered.add(arg);
+            } else {
+                LOG.warning("Dropped JVM option " + arg + " because Java " + javaVersion + " does not support it");
+            }
+        }
+        return filtered;
     }
 
     /// Do something here.
