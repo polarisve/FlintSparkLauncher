@@ -322,6 +322,14 @@ public final class JavaManager {
                 && (OperatingSystem.CURRENT_OS == OperatingSystem.WINDOWS || OperatingSystem.CURRENT_OS == OperatingSystem.MACOS)
                 && (gameVersion == null || gameVersion.compareTo("1.6") < 0);
 
+        // The major version declared by the version JSON is a hard lower bound. Modern version JSONs
+        // carry JVM options such as --enable-native-access that older runtimes reject outright, so a
+        // runtime below the declared version can never launch the game: the JVM aborts with
+        // "Unrecognized option" before the game even starts. Never hand out such a runtime, even when
+        // the version constraints above fail to apply to this instance.
+        @Nullable GameJavaVersion declaredJavaVersion = manifest != null ? manifest.javaVersion() : null;
+        int minimumMajorVersion = declaredJavaVersion != null ? declaredJavaVersion.majorVersion() : -1;
+
         JavaRuntime mandatory = null;
         JavaRuntime suggested = null;
         for (JavaRuntime java : javaRuntimes) {
@@ -332,6 +340,9 @@ public final class JavaManager {
                 if (java.getArchitecture() != Architecture.SYSTEM_ARCH)
                     continue;
             }
+
+            if (minimumMajorVersion > 0 && java.getParsedVersion() < minimumMajorVersion)
+                continue;
 
             boolean violationMandatory = false;
             boolean violationSuggested = false;

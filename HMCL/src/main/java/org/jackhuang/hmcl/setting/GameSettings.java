@@ -930,6 +930,27 @@ public sealed abstract class GameSettings extends ObservableSetting {
 
         /// Finds the effective Java runtime.
         public @Nullable JavaRuntime getJava(@Nullable GameVersionNumber gameVersion, @Nullable GameInstanceManifest manifest) throws InterruptedException {
+            JavaRuntime selected = selectJava(gameVersion, manifest);
+
+            // The launcher is distributed to end users and must always pick a runtime that can actually
+            // start the instance without asking them to choose one. A remembered, detected or manually
+            // pinned runtime that is older than the major version declared by the version JSON (for
+            // example Java 8 for a version that passes --enable-native-access) can never work: the JVM
+            // aborts with "Unrecognized option" before the game starts. Fall back to automatic selection
+            // instead of handing out such a runtime.
+            @Nullable GameJavaVersion declaredJavaVersion = manifest != null ? manifest.javaVersion() : null;
+            if (selected != null && declaredJavaVersion != null
+                    && selected.getParsedVersion() < declaredJavaVersion.majorVersion()) {
+                LOG.info(String.format(
+                        "Ignoring Java %s because this instance requires Java %d, selecting a suitable runtime automatically",
+                        selected.getVersion(), declaredJavaVersion.majorVersion()));
+                return JavaManager.findSuitableJava(gameVersion, manifest);
+            }
+
+            return selected;
+        }
+
+        private @Nullable JavaRuntime selectJava(@Nullable GameVersionNumber gameVersion, @Nullable GameInstanceManifest manifest) throws InterruptedException {
             JavaVersionType javaVersionType = getInheritable(GameSettings::javaTypeProperty);
             switch (javaVersionType) {
                 case AUTO:
@@ -938,7 +959,10 @@ public sealed abstract class GameSettings extends ObservableSetting {
                     try {
                         return JavaManager.getJava(Path.of(getInheritable(GameSettings::customJavaPathProperty)));
                     } catch (IOException | InvalidPathException e) {
-                        return null;
+                        // The manually picked runtime no longer exists: fall back to automatic selection
+                        // instead of leaving the instance without a Java runtime.
+                        LOG.warning("Failed to use the custom Java path, selecting a suitable runtime automatically", e);
+                        return JavaManager.findSuitableJava(gameVersion, manifest);
                     }
                 case VERSION: {
                     String javaVersion = getInheritable(GameSettings::customJavaVersionProperty);
@@ -954,7 +978,7 @@ public sealed abstract class GameSettings extends ObservableSetting {
 
                     if (majorVersion < 0) {
                         LOG.warning("Invalid Java version: " + javaVersion);
-                        return null;
+                        return JavaManager.findSuitableJava(gameVersion, manifest);
                     }
 
                     final int finalMajorVersion = majorVersion;
@@ -985,7 +1009,9 @@ public sealed abstract class GameSettings extends ObservableSetting {
                         }
                     }
 
-                    return null;
+                    // The remembered runtime is gone: select one automatically instead of leaving the
+                    // instance without a Java runtime.
+                    return JavaManager.findSuitableJava(gameVersion, manifest);
                 }
                 default:
                     throw new AssertionError("Java Type: " + javaVersionType);
