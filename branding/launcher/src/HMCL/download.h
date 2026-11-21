@@ -19,6 +19,10 @@ struct HLDownloadOptions {
   std::wstring title;          // Progress dialog title
   std::wstring cancelMessage;  // Message shown after the user cancels
   std::wstring fileLabel;      // File name displayed in the dialog
+  // Abandon the transfer when it stays far below a usable throughput. Used for
+  // the mainland mirrors, which are expected to be fast and have replacements;
+  // the generic fallbacks leave it off so a slow but working link still wins.
+  bool failOnSlowNetwork = false;
 };
 
 // Downloads url into destFile (overwriting it), showing a native progress
