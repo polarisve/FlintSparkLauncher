@@ -36,7 +36,6 @@ import org.jackhuang.hmcl.task.FetchTask;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.task.TaskExecutor;
 import org.jackhuang.hmcl.task.TaskListener;
-import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.SVG;
 import org.jackhuang.hmcl.ui.fsl.ds.Fsl;
 import org.jackhuang.hmcl.ui.fsl.ds.FslMotion;
@@ -44,7 +43,6 @@ import org.jackhuang.hmcl.util.i18n.I18n;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
