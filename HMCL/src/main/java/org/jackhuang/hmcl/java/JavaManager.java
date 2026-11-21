@@ -233,6 +233,39 @@ public final class JavaManager {
                 });
     }
 
+    /// Creates a task that downloads and silently installs the Java runtime required by the given game
+    /// Java version into the launcher's own `.fsl/java` directory.
+    ///
+    /// The launcher directory is preferred so a machine without any installed Java can start the game
+    /// right after the download finishes, without the user having to install a JDK by hand. When that
+    /// directory cannot be written (for example when the launcher is placed in a protected location),
+    /// the per-user repository is used instead so the launch is never blocked.
+    public static Task<JavaRuntime> getAutoInstallJavaTask(DownloadProvider downloadProvider, Platform platform, GameJavaVersion gameJavaVersion) {
+        return Task.supplyAsync("Resolve Java directory", () -> selectAutoInstallRepository(platform))
+                .thenComposeAsync(Schedulers.javafx(), repository ->
+                        repository.getDownloadJavaTask(downloadProvider, platform, gameJavaVersion))
+                .thenApplyAsync(Schedulers.javafx(), java -> {
+                    addJava(java);
+                    return java;
+                });
+    }
+
+    /// Returns the repository that receives automatically downloaded Java runtimes, preferring the
+    /// launcher's own directory and falling back to the per-user directory when it is not writable.
+    private static HMCLJavaRepository selectAutoInstallRepository(Platform platform) {
+        Path platformRoot = LOCAL_REPOSITORY.getPlatformRoot(platform);
+        try {
+            Files.createDirectories(platformRoot);
+            Path probe = Files.createTempFile(platformRoot, ".writable-", ".tmp");
+            Files.deleteIfExists(probe);
+            return LOCAL_REPOSITORY;
+        } catch (IOException | SecurityException e) {
+            LOG.warning("Failed to prepare the launcher Java directory " + platformRoot
+                    + ", falling back to the user directory", e);
+            return REPOSITORY;
+        }
+    }
+
     public static Task<JavaRuntime> getInstallJavaTask(Platform platform, String name, Map<String, Object> update, Path archiveFile) {
         return REPOSITORY.getInstallJavaTask(platform, name, update, archiveFile)
                 .thenApplyAsync(Schedulers.javafx(), java -> {

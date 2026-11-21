@@ -161,11 +161,23 @@ public final class SelfDependencyPatcher {
      * Patch in any missing dependencies, if any.
      */
     public static void patch() throws PatchException, CancellationException {
+        patch(false);
+    }
+
+    /**
+     * Patch in any missing dependencies, if any.
+     *
+     * @param force when {@code true} the check whether JavaFX is already loadable is skipped, so that a
+     *              broken or mismatched JavaFX installation is downloaded and patched again
+     */
+    public static void patch(boolean force) throws PatchException, CancellationException {
         // Do nothing if JavaFX is detected
-        try {
-            Class.forName("javafx.application.Application");
-            return;
-        } catch (Exception ignored) {
+        if (!force) {
+            try {
+                Class.forName("javafx.application.Application");
+                return;
+            } catch (Exception ignored) {
+            }
         }
 
         SelfDependencyPatcher patcher = new SelfDependencyPatcher();

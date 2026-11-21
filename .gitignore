@@ -83,3 +83,6 @@ fsl-secrets.properties
 
 # FSL: local reference copies of other launchers (PCL has its own licence; never commit)
 /reference/
+
+# FSL local launcher data (accounts.json / logs / state), never commit
+/.fsl/
