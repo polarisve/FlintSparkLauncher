@@ -26,6 +26,7 @@ import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
@@ -78,6 +79,19 @@ public final class FslTaskCenter {
         private final TaskExecutor executor;
         private final TaskListPane steps = new TaskListPane();
         private final DoubleProperty progress = new SimpleDoubleProperty(0);
+        /// Progress of the step that is running right now, reported by the task itself in [0, 1].
+        private final DoubleProperty stepProgress = new SimpleDoubleProperty(0);
+        private final ChangeListener<Number> stepWatcher = (observable, oldValue, newValue) -> {
+            double value = newValue == null ? 0 : newValue.doubleValue();
+            if (Double.isNaN(value) || value < 0) value = 0;
+            else if (value > 1) value = 1;
+            final double stepValue = value;
+            runOnFxThread(() -> {
+                stepProgress.set(stepValue);
+                refresh();
+            });
+        };
+        private @Nullable Task<?> watching;
         private int total;
         private int done;
 
@@ -89,12 +103,37 @@ public final class FslTaskCenter {
             this.cancellable = cancellable;
         }
 
-        private void count(boolean finished) {
-            Platform.runLater(() -> {
-                if (finished) done++;
-                else total++;
-                progress.set(total == 0 ? 0 : Math.min(1, (double) done / total));
-            });
+        /// Recomputes the overall progress as finished steps plus the progress the running step
+        /// reports itself. Without the running step a single-step task (for example a launcher
+        /// update) would stay at 0% from start to finish.
+        private void refresh() {
+            if (total <= 0) {
+                progress.set(0);
+                return;
+            }
+            double running = Math.max(0, Math.min(1, stepProgress.get()));
+            progress.set(Math.min(1, (done + running) / total));
+        }
+
+        private void watch(Task<?> task) {
+            unwatch();
+            watching = task;
+            stepProgress.set(0);
+            task.progressProperty().addListener(stepWatcher);
+            refresh();
+        }
+
+        private void unwatch() {
+            if (watching != null) {
+                watching.progressProperty().removeListener(stepWatcher);
+                watching = null;
+            }
+            stepProgress.set(0);
+        }
+
+        private static void runOnFxThread(Runnable action) {
+            if (Platform.isFxApplicationThread()) action.run();
+            else Platform.runLater(action);
         }
     }
 
@@ -135,17 +174,28 @@ public final class FslTaskCenter {
         executor.addTaskListener(new TaskListener() {
             @Override
             public void onReady(Task<?> task) {
-                entry.count(false);
+                Platform.runLater(() -> {
+                    entry.total++;
+                    entry.watch(task);
+                });
             }
 
             @Override
             public void onFinished(Task<?> task) {
-                entry.count(true);
+                Platform.runLater(() -> {
+                    entry.unwatch();
+                    entry.done++;
+                    entry.refresh();
+                });
             }
 
             @Override
             public void onFailed(Task<?> task, Throwable throwable) {
-                entry.count(true);
+                Platform.runLater(() -> {
+                    entry.unwatch();
+                    entry.done++;
+                    entry.refresh();
+                });
             }
 
             @Override
