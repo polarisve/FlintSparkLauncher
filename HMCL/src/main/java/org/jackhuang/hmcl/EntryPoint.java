@@ -32,6 +32,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.concurrent.CancellationException;
 
 import static org.jackhuang.hmcl.util.logging.Logger.LOG;
@@ -58,12 +59,47 @@ public final class EntryPoint {
                 initIcon();
         }
 
-        checkJavaFX();
-        verifyJavaFX();
-        addEnableNativeAccess();
+        // FSL must start on any computer: when this Java runtime cannot provide what FSL needs,
+        // download and install the missing pieces instead of asking the user to do it manually.
+        JavaRuntimeRepair.ensureRuntimeModules(args);
+
+        checkJavaFX(args);
+        verifyJavaFX(args);
+        addEnableNativeAccess(args);
         enableUnsafeMemoryAccess();
 
-        Launcher.main(args);
+        try {
+            Launcher.main(args);
+        } catch (LinkageError e) {
+            // A Java runtime without jdk.unsupported (JNA), java.desktop (Swing/JavaFX) or
+            // jdk.localedata fails with a linkage error. Repair the runtime and try once more.
+            if (!isRuntimeModuleFailure(e))
+                throw e;
+
+            LOG.error("FSL cannot start with the current Java runtime", e);
+            JavaRuntimeRepair.recover(JavaRuntimeRepair.Failure.RUNTIME_MODULES,
+                    JavaRuntimeRepair.describeFailure(e), args);
+            Launcher.main(args);
+        }
+    }
+
+    /**
+     * Whether a linkage error was caused by a Java runtime that lacks the modules FSL needs.
+     */
+    private static boolean isRuntimeModuleFailure(Throwable throwable) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            String message = String.valueOf(current.getMessage()).toLowerCase(Locale.ROOT);
+            if (message.contains("jna")
+                    || message.contains("jdk.unsupported")
+                    || message.contains("java.desktop")
+                    || message.contains("jdk.crypto.ec")
+                    || message.contains("jdk.localedata")
+                    || message.contains("native library"))
+                return true;
+            if (current.getCause() == current)
+                break;
+        }
+        return false;
     }
 
     public static void exit(int exitCode) {
@@ -130,12 +166,15 @@ public final class EntryPoint {
         }
     }
 
-    private static void checkJavaFX() {
+    private static void checkJavaFX(String[] args) {
         try {
             SelfDependencyPatcher.patch();
         } catch (SelfDependencyPatcher.PatchException e) {
             LOG.error("Unable to patch JVM", e);
-            showErrorAndExit(i18n("fatal.javafx.missing"));
+            // JavaFX is missing or does not match the running Java: download and patch it again,
+            // restarting FSL with another runtime only when that is impossible.
+            JavaRuntimeRepair.recover(JavaRuntimeRepair.Failure.JAVA_FX,
+                    "Unable to patch JVM: " + JavaRuntimeRepair.describeFailure(e), args);
         } catch (CancellationException e) {
             LOG.error("User cancels downloading JavaFX", e);
             exit(0);
@@ -145,14 +184,17 @@ public final class EntryPoint {
     /**
      * Check if JavaFX exists but is incomplete
      */
-    private static void verifyJavaFX() {
+    private static void verifyJavaFX(String[] args) {
         try {
             Class.forName("javafx.beans.binding.Binding"); // javafx.base
             Class.forName("javafx.stage.Stage");           // javafx.graphics
             Class.forName("javafx.scene.control.Skin");    // javafx.controls
         } catch (Exception e) {
             LOG.warning("JavaFX is incomplete or not found", e);
-            showErrorAndExit(i18n("fatal.javafx.incomplete"));
+            // Drop the incomplete JavaFX and download a complete one instead of asking the user
+            // to replace the Java runtime.
+            JavaRuntimeRepair.recover(JavaRuntimeRepair.Failure.JAVA_FX,
+                    "JavaFX is incomplete or not found: " + JavaRuntimeRepair.describeFailure(e), args);
         }
     }
 
@@ -163,7 +205,7 @@ public final class EntryPoint {
         }
     }
 
-    private static void addEnableNativeAccess() {
+    private static void addEnableNativeAccess(String[] args) {
         if (JavaRuntime.CURRENT_VERSION > 21) {
             try {
                 // javafx.graphics
@@ -180,7 +222,9 @@ public final class EntryPoint {
                 }
             } catch (ClassNotFoundException e) {
                 LOG.error("Failed to add enable native access for JavaFX", e);
-                showErrorAndExit(i18n("fatal.javafx.incomplete"));
+                // JavaFX cannot be loaded at all: it has to be downloaded for this Java runtime.
+                JavaRuntimeRepair.recover(JavaRuntimeRepair.Failure.JAVA_FX,
+                        "Failed to add enable native access for JavaFX: " + JavaRuntimeRepair.describeFailure(e), args);
             }
         }
     }

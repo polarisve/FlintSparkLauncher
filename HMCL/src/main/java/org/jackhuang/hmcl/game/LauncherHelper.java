@@ -81,6 +81,9 @@ public final class LauncherHelper {
 
     private static final String LWJGL_3_4_1_TIP = "lwjgl3.4.1-ffm";
 
+    /// How many times the automatic Java download is attempted before the launch is cancelled.
+    private static final int MAX_JAVA_DOWNLOAD_ATTEMPTS = 3;
+
     private final HMCLGameInstance gameInstance;
     private Account account;
     private Path scriptFile;
@@ -486,11 +489,8 @@ public final class LauncherHelper {
                                     future.complete(downloadedJava);
                                 } else {
                                     LOG.warning("Failed to download Java " + declaredJavaVersion.majorVersion(), throwable);
-                                    // Report the failure instead of cancelling the launch without any hint.
-                                    FXUtils.runInFX(() -> Controllers.dialog(
-                                            i18n("launch.failed.no_accepted_java"),
-                                            i18n("message.error"),
-                                            MessageType.ERROR));
+                                    // The download helper already offered the user a retry, so do not stack
+                                    // another dialog on top of it.
                                     future.completeExceptionally(new CancellationException("Java version too low"));
                                 }
                             }, Schedulers.javafx());
@@ -520,7 +520,6 @@ public final class LauncherHelper {
                 CompletableFuture<JavaRuntime> future = new CompletableFuture<>();
                 Task<JavaRuntime> result = Task.fromCompletableFuture(future);
                 Runnable breakAction = () -> future.completeExceptionally(new CancellationException("No accepted java"));
-                List<GameJavaVersion> supportedVersions = GameJavaVersion.getSupportedVersions(SYSTEM_PLATFORM);
 
                 GameJavaVersion targetJavaVersion = null;
                 if (javaVersionType == JavaVersionType.VERSION) {
@@ -565,14 +564,19 @@ public final class LauncherHelper {
                         targetJavaVersion = GameJavaVersion.getMinimumJavaVersion(gameVersion);
                 }
 
-                if (targetJavaVersion != null && supportedVersions.contains(targetJavaVersion)) {
+                // Always try to fetch the runtime this instance needs: on a machine without any
+                // installed Java this is the only way the game can be started, and a runtime that the
+                // Mojang component list does not cover is reported by the download itself.
+                if (targetJavaVersion != null) {
                     downloadJava(targetJavaVersion, gameInstance.getRepository())
                             .whenCompleteAsync((downloadedJava, exception) -> {
                                 if (exception == null) {
                                     future.complete(downloadedJava);
                                 } else {
                                     LOG.warning("Failed to download java", exception);
-                                    completeWithInstalledJava(future, manifest, breakAction);
+                                    // The download helper already offered a retry, so fall back to an
+                                    // installed runtime without another prompt.
+                                    completeWithInstalledJava(future, manifest, breakAction, true);
                                 }
                             }, Schedulers.javafx());
                 } else {
@@ -832,6 +836,17 @@ public final class LauncherHelper {
     private static void completeWithInstalledJava(CompletableFuture<JavaRuntime> future,
                                                   GameInstanceManifest manifest,
                                                   Runnable breakAction) {
+        completeWithInstalledJava(future, manifest, breakAction, false);
+    }
+
+    /// Falls back to an already installed runtime, optionally without telling the user about it.
+    ///
+    /// `silent` is used right after an automatic Java download failed: the user has already been told
+    /// about the failure and offered a retry, so cancelling the launch must not stack another dialog.
+    private static void completeWithInstalledJava(CompletableFuture<JavaRuntime> future,
+                                                  GameInstanceManifest manifest,
+                                                  Runnable breakAction,
+                                                  boolean silent) {
         @Nullable JavaRuntime defaultJava = JavaRuntime.getDefault();
         if (defaultJava != null && isJavaVersionAcceptable(defaultJava, manifest)) {
             future.complete(defaultJava);
@@ -840,6 +855,11 @@ public final class LauncherHelper {
 
         LOG.warning("No installed Java runtime can start this instance: refusing to fall back to "
                 + (defaultJava != null ? defaultJava.getVersion() : "no runtime at all"));
+        if (silent) {
+            breakAction.run();
+            return;
+        }
+
         FXUtils.runInFX(() -> Controllers.dialog(
                 i18n("launch.failed.no_accepted_java"),
                 i18n("message.error"),
@@ -873,30 +893,53 @@ public final class LauncherHelper {
         return declaredJavaVersion == null || java.getParsedVersion() >= declaredJavaVersion.majorVersion();
     }
 
+    /// Downloads and silently installs the Java runtime required by the given game Java version.
+    ///
+    /// The runtime is installed into the launcher's own `.fsl/java` directory and the download runs in
+    /// the task center, so a machine without any installed Java can start the game without the user
+    /// having to fetch a JDK from the Java website. The user is only prompted when the download fails,
+    /// where the launch can either be retried or cancelled.
     private static CompletableFuture<JavaRuntime> downloadJava(GameJavaVersion javaVersion, HMCLGameRepository repository) {
         CompletableFuture<JavaRuntime> future = new CompletableFuture<>();
-        Controllers.dialog(new MessageDialogPane.Builder(
-                i18n("launch.advice.require_newer_java_version", javaVersion.majorVersion()),
-                i18n("message.warning"),
-                MessageType.QUESTION)
-                .yesOrNo(() -> {
-                    DownloadProvider downloadProvider = repository.getDependency().getDownloadProvider();
-                    Controllers.taskDialog(JavaManager.getDownloadJavaTask(downloadProvider, SYSTEM_PLATFORM, javaVersion)
-                            .whenComplete(Schedulers.javafx(), (result, exception) -> {
-                                if (exception == null) {
-                                    future.complete(result);
-                                } else {
-                                    Throwable resolvedException = resolveException(exception);
-                                    LOG.warning("Failed to download java", exception);
-                                    if (!(resolvedException instanceof CancellationException)) {
-                                        Controllers.dialog(I18n.localizeErrorMessage(resolvedException), i18n("install.failed"));
-                                    }
-                                    future.completeExceptionally(new CancellationException());
-                                }
-                            }), i18n("download.java"), it -> future.completeExceptionally(new CancellationException()));
-                }, () -> future.completeExceptionally(new CancellationException())).build());
-
+        DownloadProvider downloadProvider = repository.getDependency().getDownloadProvider();
+        LOG.info("Downloading Java " + javaVersion.majorVersion() + " (" + javaVersion.component() + ") automatically");
+        startJavaDownload(downloadProvider, javaVersion, 0, future);
         return future;
+    }
+
+    /// Starts one attempt of the automatic Java download and asks the user to retry after a failure.
+    private static void startJavaDownload(DownloadProvider downloadProvider,
+                                          GameJavaVersion javaVersion,
+                                          int attempt,
+                                          CompletableFuture<JavaRuntime> future) {
+        Controllers.taskDialog(JavaManager.getAutoInstallJavaTask(downloadProvider, SYSTEM_PLATFORM, javaVersion)
+                .whenComplete(Schedulers.javafx(), (result, exception) -> {
+                    if (exception == null) {
+                        LOG.info("Java " + javaVersion.majorVersion() + " has been installed automatically");
+                        future.complete(result);
+                        return;
+                    }
+
+                    Throwable resolvedException = resolveException(exception);
+                    if (resolvedException instanceof CancellationException) {
+                        future.completeExceptionally(new CancellationException());
+                        return;
+                    }
+
+                    LOG.warning("Failed to download Java " + javaVersion.majorVersion(), resolvedException);
+                    if (attempt + 1 >= MAX_JAVA_DOWNLOAD_ATTEMPTS) {
+                        Controllers.dialog(I18n.localizeErrorMessage(resolvedException), i18n("install.failed"),
+                                MessageType.ERROR, () -> future.completeExceptionally(new CancellationException()));
+                        return;
+                    }
+
+                    Controllers.confirm(
+                            I18n.localizeErrorMessage(resolvedException) + "\n\n" + i18n("launch.java.download_failed.retry"),
+                            i18n("install.failed"),
+                            MessageType.ERROR,
+                            () -> startJavaDownload(downloadProvider, javaVersion, attempt + 1, future),
+                            () -> future.completeExceptionally(new CancellationException()));
+                }), i18n("download.java"), it -> future.completeExceptionally(new CancellationException()));
     }
 
     private Task<AuthInfo> logIn(Account account) {
