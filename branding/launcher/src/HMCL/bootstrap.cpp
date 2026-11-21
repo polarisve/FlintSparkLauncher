@@ -42,6 +42,10 @@ constexpr LPCWSTR kAssumeYesEnvVar = L"FSL_JAVA_ASSUME_YES";
 struct HLDownloadSource {
   std::wstring url;
   std::wstring label;
+  // Mirrors are expected to be fast, so a mirror that trickles bytes is
+  // abandoned and the next candidate is tried. The generic fallbacks keep
+  // running instead: any working link beats no runtime at all.
+  bool strictSpeed = false;
 };
 
 std::wstring HLGetBundledJavaDirectoryName(HLArchitecture arch) {
@@ -75,13 +79,12 @@ std::vector<HLDownloadSource> HLBuildDownloadSources(HLArchitecture arch) {
   // Mainland China mirrors are tried first: the Adoptium API and the Microsoft
   // aka.ms links redirect to GitHub / Azure CDN endpoints that are frequently
   // unreachable there, which is why they stay as fallbacks below.
-  std::wstring mirrorUrl;
-  std::wstring mirrorError;
-  if (HLResolveMirrorJavaUrl(arch, mirrorUrl, mirrorError)) {
+  // Every mirror that answers contributes a source, so a single mirror being
+  // out of sync (a listing that points at a file it has not fetched yet) only
+  // costs one fast 404 instead of falling through to the slow generic sources.
+  for (const auto &mirrorUrl : HLResolveMirrorJavaUrls(arch)) {
     HLDebugLog(std::format(L"Resolved mirror Java runtime: {}", mirrorUrl));
-    sources.push_back({mirrorUrl, L"Tsinghua Adoptium mirror"});
-  } else {
-    HLDebugLog(std::format(L"Skipping mirror Java runtime: {}", mirrorError));
+    sources.push_back({mirrorUrl, L"Adoptium mirror", true});
   }
 
   const auto addAdoptium = [&sources](int featureVersion, LPCWSTR platform) {
@@ -91,16 +94,19 @@ std::vector<HLDownloadSource> HLBuildDownloadSources(HLArchitecture arch) {
 
   switch (arch) {
     case HLArchitecture::ARM64:
-      addAdoptium(kPreferredJavaFeatureVersion, L"aarch64");
-      addAdoptium(HMCL_EXPECTED_JAVA_MAJOR_VERSION, L"aarch64");
+      // aka.ms is served from an Azure CDN edge that answers from mainland
+      // China in the hundreds of KB/s, while api.adoptium.net usually stalls
+      // until it times out, so the CDN link comes first.
       sources.push_back({L"https://aka.ms/download-jdk/microsoft-jdk-21-windows-aarch64.zip",
                          L"Microsoft Build of OpenJDK 21"});
+      addAdoptium(kPreferredJavaFeatureVersion, L"aarch64");
+      addAdoptium(HMCL_EXPECTED_JAVA_MAJOR_VERSION, L"aarch64");
       break;
     case HLArchitecture::X86_64:
-      addAdoptium(kPreferredJavaFeatureVersion, L"x64");
-      addAdoptium(HMCL_EXPECTED_JAVA_MAJOR_VERSION, L"x64");
       sources.push_back(
           {L"https://aka.ms/download-jdk/microsoft-jdk-21-windows-x64.zip", L"Microsoft Build of OpenJDK 21"});
+      addAdoptium(kPreferredJavaFeatureVersion, L"x64");
+      addAdoptium(HMCL_EXPECTED_JAVA_MAJOR_VERSION, L"x64");
       break;
     case HLArchitecture::X86:
     default:
@@ -247,7 +253,8 @@ HLJavaBootstrapOutcome HLBootstrapJavaRuntime(const HLPath &workdir, HLArchitect
     HLDebugLog(std::format(L"Downloading {} from {}", source.label, source.url));
     const HLDownloadOptions options{.title = i18n.javaDownloadTitle,
                                     .cancelMessage = i18n.javaDownloadCancelMessage,
-                                    .fileLabel = source.label};
+                                    .fileLabel = source.label,
+                                    .failOnSlowNetwork = source.strictSpeed};
     download = HLDownloadFile(source.url, archivePath, options);
     if (download.status == HLDownloadStatus::Succeeded && HLIsZipArchive(archivePath)) {
       downloaded = true;
@@ -389,39 +396,62 @@ LPCWSTR HLGetAdoptiumPlatformName(HLArchitecture arch) {
 
 }  // namespace
 
+std::vector<std::wstring> HLResolveMirrorJavaUrls(HLArchitecture arch) {
+  // Ordered by measured throughput from mainland China. A mirror that cannot
+  // be listed is skipped silently: the caller still has the generic sources.
+  static constexpr LPCWSTR kMirrorBases[] = {
+      L"https://mirrors.tuna.tsinghua.edu.cn/Adoptium/",
+      L"https://mirrors.cernet.edu.cn/adoptium/",
+  };
+
+  const std::wstring pattern = std::wstring(L"OpenJDK[0-9]+U-jre_") + HLGetAdoptiumPlatformName(arch) +
+                               L"_windows_hotspot_[0-9._]+\\.zip";
+  const std::wregex matcher(pattern);
+
+  std::vector<std::wstring> urls;
+  for (LPCWSTR mirrorBase : kMirrorBases) {
+    const std::wstring base = std::wstring(mirrorBase) + std::to_wstring(kPreferredJavaFeatureVersion) + L"/jre/" +
+                              HLGetAdoptiumPlatformName(arch) + L"/windows/";
+
+    std::wstring page;
+    std::wstring error;
+    if (!HLHttpGetText(base, page, error)) {
+      HLDebugLog(std::format(L"Skipping mirror {}: {}", base, error));
+      continue;
+    }
+
+    std::wstring bestName;
+    std::vector<int> bestKey;
+    for (std::wsregex_iterator it(page.begin(), page.end(), matcher); it != std::wsregex_iterator(); ++it) {
+      const std::wstring candidate = it->str();
+      const auto key = HLParseVersionKey(candidate);
+      if (bestName.empty() || HLIsNewerVersionKey(key, bestKey)) {
+        bestName = candidate;
+        bestKey = key;
+      }
+    }
+
+    if (bestName.empty()) {
+      HLDebugLog(L"No JRE archive found in " + base);
+      continue;
+    }
+
+    urls.push_back(base + bestName);
+  }
+
+  return urls;
+}
+
 bool HLResolveMirrorJavaUrl(HLArchitecture arch, std::wstring &url, std::wstring &error) {
   url.clear();
   error.clear();
 
-  const std::wstring base = L"https://mirrors.tuna.tsinghua.edu.cn/Adoptium/" +
-                            std::to_wstring(kPreferredJavaFeatureVersion) + L"/jre/" +
-                            HLGetAdoptiumPlatformName(arch) + L"/windows/";
-
-  std::wstring page;
-  if (!HLHttpGetText(base, page, error)) {
+  const std::vector<std::wstring> urls = HLResolveMirrorJavaUrls(arch);
+  if (urls.empty()) {
+    error = L"No JRE archive found on any mirror";
     return false;
   }
 
-  const std::wstring pattern =
-      std::wstring(L"OpenJDK[0-9]+U-jre_") + HLGetAdoptiumPlatformName(arch) + L"_windows_hotspot_[0-9._]+\\.zip";
-  const std::wregex matcher(pattern);
-
-  std::wstring bestName;
-  std::vector<int> bestKey;
-  for (std::wsregex_iterator it(page.begin(), page.end(), matcher); it != std::wsregex_iterator(); ++it) {
-    const std::wstring candidate = it->str();
-    const auto key = HLParseVersionKey(candidate);
-    if (bestName.empty() || HLIsNewerVersionKey(key, bestKey)) {
-      bestName = candidate;
-      bestKey = key;
-    }
-  }
-
-  if (bestName.empty()) {
-    error = L"No JRE archive found in " + base;
-    return false;
-  }
-
-  url = base + bestName;
+  url = urls.front();
   return true;
 }

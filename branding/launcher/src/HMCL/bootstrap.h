@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <string>
+#include <vector>
 
 #include "path.h"
 #include "platform.h"
@@ -18,6 +19,11 @@ enum class HLJavaBootstrapOutcome {
 // launcher and the launcher restarts itself so the regular lookup order finds
 // the freshly installed runtime.
 HLJavaBootstrapOutcome HLBootstrapJavaRuntime(const HLPath &workdir, HLArchitecture arch, LPCWSTR javaExecutableName);
+
+// Resolves the newest JRE archive for arch from every mainland friendly
+// mirror that answers, ordered fastest first. The result is empty when no
+// mirror listing can be used, in which case the generic sources are tried.
+std::vector<std::wstring> HLResolveMirrorJavaUrls(HLArchitecture arch);
 
 // Resolves the newest JRE archive for arch from a mainland friendly mirror.
 // Returns false and fills error when the mirror listing cannot be used.

@@ -14,6 +14,14 @@
 namespace {
 
 constexpr DWORD kReadBufferSize = 128 * 1024;
+
+// A mirror that cannot reach a usable throughput is abandoned quickly: the
+// launcher must not spend minutes on a CDN edge that trickles bytes to a
+// mainland China connection when another mirror can serve the same archive in
+// seconds. 512 KiB per window is roughly 100 KiB/s, well below what any healthy
+// mainland mirror delivers and far above a trickling foreign CDN.
+constexpr ULONGLONG kStallWindowMs = 5000;
+constexpr unsigned long long kStallWindowMinBytes = 512 * 1024;
 constexpr int kMaxRedirects = 6;
 
 struct HLParsedUrl {
@@ -152,7 +160,11 @@ HLDownloadResult HLDownloadFile(const std::wstring &url, const HLPath &destFile,
     result.error = L"WinHttpOpen: " + HLFormatErrorMessage(GetLastError());
     return result;
   }
-  WinHttpSetTimeouts(session, 30000, 60000, 60000, 120000);
+  // Connect/response timeouts are deliberately short: an unreachable CDN
+  // must fail fast so that the next source is tried instead of stalling the
+  // launcher for minutes. The receive timeout only limits idle gaps, so a slow
+  // but live transfer is still allowed to finish.
+  WinHttpSetTimeouts(session, 8000, 8000, 20000, 30000);
 
   HLProgressDialog dialog;
   dialog.Start(options.title, options.cancelMessage);
@@ -260,6 +272,8 @@ HLDownloadResult HLDownloadFile(const std::wstring &url, const HLPath &destFile,
   bool cancelled = false;
   bool failed = false;
   ULONGLONG lastUpdate = 0;
+  ULONGLONG stallTick = GetTickCount64();
+  unsigned long long stallBytes = 0;
 
   for (;;) {
     DWORD read = 0;
@@ -298,6 +312,18 @@ HLDownloadResult HLDownloadFile(const std::wstring &url, const HLPath &destFile,
         break;
       }
     }
+
+    if (options.failOnSlowNetwork && now - stallTick >= kStallWindowMs &&
+        (contentLength == 0 || downloaded < contentLength)) {
+      const unsigned long long windowBytes = downloaded - stallBytes;
+      if (windowBytes < kStallWindowMinBytes) {
+        result.error = std::format(L"Download too slow ({} KB in {} s)", windowBytes / 1024, kStallWindowMs / 1000);
+        failed = true;
+        break;
+      }
+      stallTick = now;
+      stallBytes = downloaded;
+    }
   }
 
   cleanup();
@@ -335,6 +361,19 @@ HLDownloadResult HLDownloadFile(const std::wstring &url, const HLPath &destFile,
   return result;
 }
 
+namespace {
+// Redirects must be followed explicitly: WinHTTP defaults to refusing them, and the mirror
+// listings answer 302 when the requested path is not spelled the way the index advertises.
+bool HLEnableRedirects(HINTERNET request, std::wstring &error) {
+  DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_ALWAYS;
+  if (!WinHttpSetOption(request, WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy))) {
+    error = L"WinHttpSetOption(redirect): " + HLFormatErrorMessage(GetLastError());
+    return false;
+  }
+  return true;
+}
+}  // namespace
+
 bool HLHttpGetText(const std::wstring &url, std::wstring &body, std::wstring &error) {
   body.clear();
 
@@ -362,7 +401,11 @@ bool HLHttpGetText(const std::wstring &url, std::wstring &body, std::wstring &er
     error = L"WinHttpOpen: " + HLFormatErrorMessage(GetLastError());
     return false;
   }
-  WinHttpSetTimeouts(session, 30000, 60000, 60000, 120000);
+  // Connect/response timeouts are deliberately short: an unreachable CDN
+  // must fail fast so that the next source is tried instead of stalling the
+  // launcher for minutes. The receive timeout only limits idle gaps, so a slow
+  // but live transfer is still allowed to finish.
+  WinHttpSetTimeouts(session, 8000, 8000, 20000, 30000);
 
   bool ok = false;
   HINTERNET connection = WinHttpConnect(session, host.c_str(), components.nPort, 0);
@@ -375,6 +418,10 @@ bool HLHttpGetText(const std::wstring &url, std::wstring &body, std::wstring &er
                            WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
     if (request == nullptr) {
       error = L"WinHttpOpenRequest: " + HLFormatErrorMessage(GetLastError());
+    } else if (!HLEnableRedirects(request, error)) {
+      // A mirror listing (or a CDN URL) may answer with a redirect to the canonical spelling
+      // of the path; the text helper must follow it or the mirror looks unreachable.
+      // error already carries the reason.
     } else if (!WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
                !WinHttpReceiveResponse(request, nullptr)) {
       error = L"WinHttp request failed: " + HLFormatErrorMessage(GetLastError());
