@@ -545,7 +545,7 @@ public final class FileUtils {
         } catch (Throwable ignored) {
         }
 
-        Files.move(tmpFile, file, StandardCopyOption.REPLACE_EXISTING);
+        moveReplacing(tmpFile, file);
     }
 
     public static void saveSafely(Path file, ExceptionalConsumer<? super OutputStream, IOException> action) throws IOException {
@@ -567,7 +567,46 @@ public final class FileUtils {
         } catch (Throwable ignored) {
         }
 
-        Files.move(tmpFile, file, StandardCopyOption.REPLACE_EXISTING);
+        moveReplacing(tmpFile, file);
+    }
+
+    /// Moves `source` to `target`, replacing `target` if it already exists.
+    ///
+    /// On Windows `MoveFileEx` reports `ERROR_ALREADY_EXISTS` or `ERROR_ACCESS_DENIED` when the target file is
+    /// briefly held open by another process (antivirus, the search indexer, or a previous instance shutting down),
+    /// which surfaces as [FileAlreadyExistsException]. Retry a few times after removing the target so that saving
+    /// a setting does not silently fail.
+    private static void moveReplacing(Path source, Path target) throws IOException {
+        IOException last = null;
+        for (int attempt = 0; attempt < 6; attempt++) {
+            try {
+                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+                return;
+            } catch (FileAlreadyExistsException | AccessDeniedException e) {
+                last = e;
+                try {
+                    Files.deleteIfExists(target);
+                } catch (IOException ignored) {
+                }
+                try {
+                    Thread.sleep(80L * (attempt + 1));
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+
+        if (Files.isRegularFile(source)) {
+            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.deleteIfExists(source);
+            } catch (IOException ignored) {
+            }
+            return;
+        }
+
+        throw last != null ? last : new IOException("Failed to move " + source + " to " + target);
     }
 
     public static String printFileStructure(Path path, int maxDepth) throws IOException {
