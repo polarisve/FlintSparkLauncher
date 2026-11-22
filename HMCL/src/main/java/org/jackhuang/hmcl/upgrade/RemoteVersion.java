@@ -59,27 +59,40 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
     public static RemoteVersion fetch(UpdateChannel channel, boolean preview, List<String> sources) throws IOException {
         List<CompletableFuture<RemoteVersion>> futures = sources.stream()
                 .map(source -> CompletableFuture.supplyAsync(() -> {
-                    // FSL: one network hiccup should not hide an update, so each source is tried twice
-                    IOException last = null;
-                    for (int attempt = 0; attempt < 2; attempt++) {
-                        try {
-                            return parse(channel, preview, NetworkUtils.doGet(source), sourceName(source));
-                        } catch (IOException e) {
-                            if (last != null) e.addSuppressed(last);
-                            last = e;
-                        }
+                    try {
+                        return parse(channel, preview, NetworkUtils.doGet(source), sourceName(source));
+                    } catch (IOException e) {
+                        throw new CompletionException(new IOException("Update source " + source + " failed", e));
                     }
-                    throw new CompletionException(new IOException("Update source " + source + " failed", last));
                 }, Schedulers.io()))
                 .toList();
 
         List<RemoteVersion> found = new ArrayList<>();
         IOException failure = null;
+        // FSL: the check is bounded by FETCH_DEADLINE_MILLIS in total. Sites that have not
+        // answered by then are dropped, so one blocked site (typically GitHub in mainland
+        // China, which used to burn two 10 s timeouts here) can no longer stall the check.
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(FETCH_DEADLINE_MILLIS);
         for (CompletableFuture<RemoteVersion> future : futures) {
+            long remaining = Math.max(deadline - System.nanoTime(), 0);
             try {
-                found.add(future.join());
-            } catch (CompletionException e) {
-                Throwable cause = e.getCause() instanceof IOException ? e.getCause() : e;
+                found.add(future.get(remaining, TimeUnit.NANOSECONDS));
+            } catch (TimeoutException e) {
+                future.cancel(true);
+                LOG.warning("Update source did not answer within " + FETCH_DEADLINE_MILLIS + " ms: " + e);
+                if (failure == null) failure = new IOException("All update sources failed");
+            } catch (InterruptedException e) {
+                future.cancel(true);
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while checking for update", e);
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof CompletionException && cause.getCause() != null) {
+                    cause = cause.getCause();
+                }
+                if (!(cause instanceof IOException)) {
+                    cause = e;
+                }
                 LOG.warning("Failed to check one update source", cause);
                 if (failure == null) failure = new IOException("All update sources failed");
                 failure.addSuppressed(cause);
@@ -165,9 +178,12 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
         return withSource(best);
     }
 
-    private static final int PROBE_BYTES = 512 * 1024;
-    private static final long PROBE_MILLIS = 5000;
-    private static final long PROBE_DEADLINE_MILLIS = 6000;
+    /// FSL: the network test only has to tell the sites apart, so a small sample is enough.
+    private static final int PROBE_BYTES = 8 * 1024;
+    private static final long PROBE_MILLIS = 1500;
+    private static final long PROBE_DEADLINE_MILLIS = 1500;
+    /// FSL: hard budget for fetching every update JSON; slow sites are simply dropped.
+    private static final long FETCH_DEADLINE_MILLIS = 3000;
 
     /// Bytes per second while reading the start of `url`; 0 if the site cannot be reached.
     private static double probeSpeed(String url) {
@@ -178,6 +194,9 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
             conn.setConnectTimeout((int) PROBE_MILLIS);
             conn.setReadTimeout((int) PROBE_MILLIS);
             conn = NetworkUtils.resolveConnection(conn);
+            // FSL: resolveConnection resets timeouts to the 10 s default, which made a single
+            // probe wait far longer than the budget above
+            conn.setConnectTimeout((int) PROBE_MILLIS);
             conn.setReadTimeout((int) PROBE_MILLIS);
             if (conn.getResponseCode() / 100 != 2) return 0;
             long read = 0;
