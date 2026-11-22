@@ -22,6 +22,7 @@ import javafx.beans.InvalidationListener;
 import javafx.beans.WeakInvalidationListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -54,6 +55,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.function.Consumer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -85,8 +87,25 @@ public final class SettingsPage extends ScrollPane {
                 FslUpdateCard updateCard = new FslUpdateCard(Metadata.FULL_TITLE, SVG.UPDATE.createIcon(18));
 
                 Button recheckButton = Fsl.button(i18n("fsl.update.check_again"), SVG.REFRESH, Fsl.ButtonKind.PRIMARY);
-                recheckButton.setOnAction(e -> UpdateChecker.requestCheckUpdate(
-                        UpdateChannel.STABLE, settings().acceptPreviewUpdateProperty().get()));
+
+                // FSL: 检测到新版本后，按钮切换为「更新」，点击直接开始更新
+                Node recheckIcon = SVG.REFRESH.createIcon(15);
+                Node upgradeIcon = SVG.UPDATE.createIcon(15);
+                Consumer<Boolean> syncUpdateButton = hasUpdate -> {
+                    recheckButton.setText(i18n(hasUpdate ? "fsl.update.do_update" : "fsl.update.check_again"));
+                    recheckButton.setGraphic(hasUpdate ? upgradeIcon : recheckIcon);
+                    recheckButton.setGraphicTextGap(6);
+                };
+
+                recheckButton.setOnAction(e -> {
+                    RemoteVersion latest = UpdateChecker.getLatestVersion();
+                    if (UpdateChecker.isOutdated() && latest != null) {
+                        UpdateHandler.updateFrom(latest);
+                    } else {
+                        UpdateChecker.requestCheckUpdate(
+                                UpdateChannel.STABLE, settings().acceptPreviewUpdateProperty().get());
+                    }
+                });
 
                 Button changelogButton = Fsl.button(i18n("fsl.update.changelog"), Fsl.ButtonKind.GHOST);
                 changelogButton.setOnAction(e -> showChangelog());
@@ -99,12 +118,16 @@ public final class SettingsPage extends ScrollPane {
                             ? RemoteVersion.sourceName(latest.source())
                             : null;
 
+                    boolean hasUpdate = UpdateChecker.isOutdated() && latest != null;
+
                     if (UpdateChecker.isCheckingUpdate()) {
+                        syncUpdateButton.accept(false);
                         recheckButton.setDisable(true);
                         updateCard.setStatus(i18n("fsl.update.checking_network"), FslUpdateCard.Tone.BUSY);
                         return;
                     }
 
+                    syncUpdateButton.accept(hasUpdate);
                     recheckButton.setDisable(false);
 
                     Throwable t = UpdateChecker.errorProperty().get();
@@ -116,7 +139,7 @@ public final class SettingsPage extends ScrollPane {
                                     t.getClass().getSimpleName() + ": " + t.getLocalizedMessage()),
                                     FslUpdateCard.Tone.ERROR);
                         }
-                    } else if (UpdateChecker.isOutdated() && latest != null) {
+                    } else if (hasUpdate) {
                         updateCard.setStatus(source == null
                                         ? i18n("update.newest_version", latest.version())
                                         : i18n("fsl.update.new_version", latest.version(), source),
