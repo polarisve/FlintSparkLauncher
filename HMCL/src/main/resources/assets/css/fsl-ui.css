@@ -1260,3 +1260,82 @@
     -fx-font-size: 13.5px;
     -fx-font-weight: normal;
 }
+
+/* ---------- Update section (settings) ---------- */
+.fsl-update-card {
+    -fx-background-color: -fsl2-card;
+    -fx-background-radius: 12;
+    -fx-border-color: -fsl2-card-line;
+    -fx-border-radius: 12;
+    -fx-padding: 14 16 14 16;
+    -fx-spacing: 12;
+    -fx-alignment: center-left;
+}
+
+.fsl-update-card:hover {
+    -fx-background-color: -fsl2-card-hover;
+    -fx-border-color: -fsl2-border;
+}
+
+.fsl-update-icon {
+    -fx-background-color: linear-gradient(to bottom right, #A78BFA, #6D5DF5);
+    -fx-background-radius: 11;
+}
+
+.fsl-update-icon .svg {
+    -fx-fill: white;
+}
+
+.fsl-update-title {
+    -fx-text-fill: -fsl2-text;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.fsl-update-status {
+    -fx-text-fill: -fsl2-muted;
+    -fx-font-size: 12px;
+}
+
+.fsl-update-status-busy {
+    -fx-text-fill: -fsl2-primary;
+    -fx-font-size: 12px;
+}
+
+.fsl-update-status-latest {
+    -fx-text-fill: -fsl2-mint;
+    -fx-font-size: 12px;
+}
+
+.fsl-update-status-new {
+    -fx-text-fill: -fsl2-primary;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.fsl-update-status-error {
+    -fx-text-fill: -fsl2-danger;
+    -fx-font-size: 12px;
+}
+
+.fsl-update-channel {
+    -fx-background-color: transparent;
+    -fx-background-radius: 999;
+    -fx-border-color: rgba(167, 139, 250, 0.55);
+    -fx-border-radius: 999;
+    -fx-text-fill: -fsl2-primary;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 2 10 2 10;
+    -fx-min-height: 22;
+    -fx-cursor: hand;
+}
+
+.fsl-update-channel:hover {
+    -fx-background-color: rgba(167, 139, 250, 0.14);
+    -fx-border-color: -fsl2-primary;
+}
+
+.fsl-update-channel .svg {
+    -fx-fill: -fsl2-primary;
+}

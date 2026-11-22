@@ -212,7 +212,7 @@ public record RemoteVersion(UpdateChannel channel, String version, List<String> 
     }
 
     /// Readable name of an update source: "Gitee", "GitHub", or the host.
-    static String sourceName(String url) {
+    public static String sourceName(String url) {
         String host;
         try {
             host = Objects.requireNonNullElse(URI.create(url).getHost(), "");

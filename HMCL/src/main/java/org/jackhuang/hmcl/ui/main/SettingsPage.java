@@ -20,11 +20,9 @@ package org.jackhuang.hmcl.ui.main;
 import com.jfoenix.controls.JFXButton;
 import javafx.beans.InvalidationListener;
 import javafx.beans.WeakInvalidationListener;
-import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.StringProperty;
-import javafx.css.PseudoClass;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.BorderPane;
@@ -35,6 +33,9 @@ import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.SVG;
+import org.jackhuang.hmcl.ui.fsl.ds.Fsl;
+import org.jackhuang.hmcl.ui.fsl.ds.FslToggle;
+import org.jackhuang.hmcl.ui.fsl.ds.FslUpdateCard;
 import org.jackhuang.hmcl.ui.construct.*;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
 import org.jackhuang.hmcl.upgrade.*;
@@ -78,186 +79,181 @@ public final class SettingsPage extends ScrollPane {
         FXUtils.smoothScrolling(this);
 
         {
-            ComponentList updatePaneList = new ComponentList();
+            VBox updateSection = new VBox(10);
+
             {
-                ObjectProperty<UpdateChannel> updateChannel;
-                {
+                FslUpdateCard updateCard = new FslUpdateCard(Metadata.FULL_TITLE, SVG.UPDATE.createIcon(18));
 
-                    JFXButton updateButton = FXUtils.newToggleButton4(SVG.UPDATE, 20);
-                    updateButton.setOnAction(e -> onUpdate());
-                    updateButton.setPadding(Insets.EMPTY);
-                    FXUtils.installFastTooltip(updateButton, i18n("update.tooltip"));
+                Button recheckButton = Fsl.button(i18n("fsl.update.check_again"), SVG.REFRESH, Fsl.ButtonKind.PRIMARY);
+                recheckButton.setOnAction(e -> UpdateChecker.requestCheckUpdate(
+                        UpdateChannel.STABLE, settings().acceptPreviewUpdateProperty().get()));
 
-                    var updatePane = new LineSelectButton<UpdateChannel>() {
+                Button changelogButton = Fsl.button(i18n("fsl.update.changelog"), Fsl.ButtonKind.GHOST);
+                changelogButton.setOnAction(e -> showChangelog());
 
-                        {
-                            getStyleClass().add("update-pane");
-                            setNode(IDX_TRAILING, updateButton);
-                        }
+                updateCard.trailing().getChildren().addAll(changelogButton, recheckButton);
 
-                        @Override
-                        protected int getTrailingTextIndex() {
-                            return LineComponent.IDX_TRAILING + 1;
-                        }
-                    };
-                    updateChannel = updatePane.valueProperty();
-                    updatePane.setTitle(i18n("update"));
-                    updatePane.setValue(UpdateChannel.getChannel());
+                updateListener = any -> {
+                    RemoteVersion latest = UpdateChecker.getLatestVersion();
+                    String source = latest != null && latest.source() != null
+                            ? RemoteVersion.sourceName(latest.source())
+                            : null;
 
-                    updatePane.setNullSafeConverter(channel -> i18n("update.channel." + channel.channelName));
-                    updatePane.setItems(List.of(UpdateChannel.STABLE, UpdateChannel.DEVELOPMENT));
-                    updatePane.setDescriptionConverter(channel -> i18n("update.note." + channel.channelName));
-
-                    final StringProperty lblUpdateSubProperty = updatePane.subtitleProperty();
-
-                    {
-                        updateListener = any -> {
-                            boolean outdated = UpdateChecker.isOutdated();
-
-                            updateButton.setVisible(outdated);
-                            updateButton.setManaged(outdated);
-                            updatePane.pseudoClassStateChanged(PseudoClass.getPseudoClass("active"), outdated);
-
-                            if (outdated) {
-                                lblUpdateSubProperty.set(i18n("update.newest_version", UpdateChecker.getLatestVersion().version()));
-                            } else if (UpdateChecker.isCheckingUpdate()) {
-                                lblUpdateSubProperty.set(i18n("update.checking"));
-                            } else if (UpdateChecker.errorProperty().get() != null) {
-                                Throwable t = UpdateChecker.errorProperty().get();
-                                if (t instanceof SelfVerificationException) {
-                                    lblUpdateSubProperty.set(i18n("update.unverified"));
-                                } else {
-                                    String msg = t.getClass().getSimpleName() + ": " + t.getLocalizedMessage();
-                                    lblUpdateSubProperty.set(i18n("update.check_failed", msg));
-                                }
-                            } else {
-                                lblUpdateSubProperty.set(i18n("update.latest"));
-                            }
-                        };
-                        UpdateChecker.latestVersionProperty().addListener(new WeakInvalidationListener(updateListener));
-                        UpdateChecker.outdatedProperty().addListener(new WeakInvalidationListener(updateListener));
-                        UpdateChecker.checkingUpdateProperty().addListener(new WeakInvalidationListener(updateListener));
-                        UpdateChecker.errorProperty().addListener(new WeakInvalidationListener(updateListener));
-                        updateListener.invalidated(null);
+                    if (UpdateChecker.isCheckingUpdate()) {
+                        recheckButton.setDisable(true);
+                        updateCard.setStatus(i18n("fsl.update.checking_network"), FslUpdateCard.Tone.BUSY);
+                        return;
                     }
 
-                    updatePaneList.getContent().add(updatePane);
-                }
+                    recheckButton.setDisable(false);
 
-                {
-                    LineToggleButton previewPane = new LineToggleButton();
-                    previewPane.setTitle(i18n("update.preview"));
-                    previewPane.setSubtitle(i18n("update.preview.subtitle"));
-                    previewPane.selectedProperty().bindBidirectional(settings().acceptPreviewUpdateProperty());
+                    Throwable t = UpdateChecker.errorProperty().get();
+                    if (t != null) {
+                        if (t instanceof SelfVerificationException) {
+                            updateCard.setStatus(i18n("update.unverified"), FslUpdateCard.Tone.ERROR);
+                        } else {
+                            updateCard.setStatus(i18n("update.check_failed",
+                                    t.getClass().getSimpleName() + ": " + t.getLocalizedMessage()),
+                                    FslUpdateCard.Tone.ERROR);
+                        }
+                    } else if (UpdateChecker.isOutdated() && latest != null) {
+                        updateCard.setStatus(source == null
+                                        ? i18n("update.newest_version", latest.version())
+                                        : i18n("fsl.update.new_version", latest.version(), source),
+                                FslUpdateCard.Tone.NEW);
+                    } else if (latest != null) {
+                        updateCard.setStatus(source == null
+                                        ? i18n("update.latest")
+                                        : i18n("fsl.update.latest_source", source),
+                                FslUpdateCard.Tone.LATEST);
+                    } else {
+                        updateCard.setStatus(i18n("update.latest"), FslUpdateCard.Tone.NORMAL);
+                    }
+                };
 
-                    InvalidationListener checkUpdateListener = e -> {
-                        UpdateChecker.requestCheckUpdate(updateChannel.get(), previewPane.isSelected());
-                    };
-                    updateChannel.addListener(checkUpdateListener);
-                    previewPane.selectedProperty().addListener(checkUpdateListener);
+                UpdateChecker.latestVersionProperty().addListener(new WeakInvalidationListener(updateListener));
+                UpdateChecker.outdatedProperty().addListener(new WeakInvalidationListener(updateListener));
+                UpdateChecker.checkingUpdateProperty().addListener(new WeakInvalidationListener(updateListener));
+                UpdateChecker.errorProperty().addListener(new WeakInvalidationListener(updateListener));
 
-                    updatePaneList.getContent().add(previewPane);
-                }
+                updateListener.invalidated(null);
+                updateSection.getChildren().add(updateCard);
+            }
 
-                {
-                    LineToggleButton disableAutoShowUpdateDialogPane = new LineToggleButton();
-                    disableAutoShowUpdateDialogPane.setTitle(i18n("update.disable_auto_show_update_dialog"));
-                    disableAutoShowUpdateDialogPane.setSubtitle(i18n("update.disable_auto_show_update_dialog.subtitle"));
-                    disableAutoShowUpdateDialogPane.selectedProperty().bindBidirectional(settings().disableAutoShowUpdateDialogProperty());
-                    updatePaneList.getContent().add(disableAutoShowUpdateDialogPane);
-                }
 
-                rootPane.getChildren().addAll(ComponentList.createComponentListTitle(i18n("update")), updatePaneList);
+            {
+                FslUpdateCard autoShowCard = new FslUpdateCard(
+                        i18n("update.disable_auto_show_update_dialog"), SVG.INFO.createIcon(18));
+                autoShowCard.setStatus(i18n("update.disable_auto_show_update_dialog.subtitle"));
+
+                FslToggle autoShowToggle = new FslToggle(settings().disableAutoShowUpdateDialogProperty().get());
+                autoShowToggle.selectedProperty().bindBidirectional(settings().disableAutoShowUpdateDialogProperty());
+                autoShowCard.trailing().getChildren().add(autoShowToggle);
+
+                updateSection.getChildren().add(autoShowCard);
+            }
+
+            rootPane.getChildren().addAll(ComponentList.createComponentListTitle(i18n("update")), updateSection);
+        }
+
+        {
+            ComponentList languagePaneList = new ComponentList();
+
+            {
+                var chooseLanguagePane = new LineSelectButton<SupportedLocale>();
+                chooseLanguagePane.setTitle(i18n("settings.launcher.language"));
+
+                SupportedLocale currentLocale = I18n.getLocale();
+                chooseLanguagePane.setNullSafeConverter(locale -> {
+                    if (locale.isDefault())
+                        return locale.getDisplayName(currentLocale);
+                    else if (locale.isSameLanguage(currentLocale))
+                        return locale.getDisplayName(locale);
+                    else
+                        return locale.getDisplayName(currentLocale) + " - " + locale.getDisplayName(locale);
+                });
+                chooseLanguagePane.setItems(SupportedLocale.getSupportedLocales());
+                chooseLanguagePane.valueProperty().bindBidirectional(settings().languageProperty());
+
+                languagePaneList.getContent().add(chooseLanguagePane);
+
+            }
+
+            rootPane.getChildren().addAll(ComponentList.createComponentListTitle(i18n("settings.launcher.language")), languagePaneList);
+        }
+
+        {
+            ComponentList miscPaneList = new ComponentList();
+
+            {
+                LineToggleButton disableAprilFools = new LineToggleButton();
+                disableAprilFools.setTitle(i18n("settings.launcher.disable_april_fools"));
+                disableAprilFools.setSubtitle(i18n("settings.take_effect_after_restart"));
+                disableAprilFools.selectedProperty().bindBidirectional(settings().disableAprilFoolsProperty());
+                miscPaneList.getContent().add(disableAprilFools);
             }
 
             {
-                ComponentList languagePaneList = new ComponentList();
+                BorderPane debugPane = new BorderPane();
 
-                {
-                    var chooseLanguagePane = new LineSelectButton<SupportedLocale>();
-                    chooseLanguagePane.setTitle(i18n("settings.launcher.language"));
+                Label left = new Label(i18n("settings.launcher.debug"));
+                BorderPane.setAlignment(left, Pos.CENTER_LEFT);
+                debugPane.setLeft(left);
 
-                    SupportedLocale currentLocale = I18n.getLocale();
-                    chooseLanguagePane.setNullSafeConverter(locale -> {
-                        if (locale.isDefault())
-                            return locale.getDisplayName(currentLocale);
-                        else if (locale.isSameLanguage(currentLocale))
-                            return locale.getDisplayName(locale);
-                        else
-                            return locale.getDisplayName(currentLocale) + " - " + locale.getDisplayName(locale);
-                    });
-                    chooseLanguagePane.setItems(SupportedLocale.getSupportedLocales());
-                    chooseLanguagePane.valueProperty().bindBidirectional(settings().languageProperty());
+                JFXButton openLogFolderButton = new JFXButton(i18n("settings.launcher.launcher_log.reveal"));
+                openLogFolderButton.setOnAction(e -> openLogFolder());
+                openLogFolderButton.getStyleClass().add("jfx-button-border");
+                if (LOG.getLogFile() == null)
+                    openLogFolderButton.setDisable(true);
 
-                    languagePaneList.getContent().add(chooseLanguagePane);
+                SpinnerPane exportLogPane = new SpinnerPane();
 
-                }
+                JFXButton logButton = FXUtils.newBorderButton(i18n("settings.launcher.launcher_log.export"));
+                exportLogPane.setContent(logButton);
+                logButton.setOnAction(e -> {
+                    exportLogPane.showSpinner();
+                    onExportLogs().whenCompleteAsync((result, exception) -> {
+                        exportLogPane.hideSpinner();
+                        if (exception == null) {
+                            Controllers.dialog(i18n("settings.launcher.launcher_log.export.success", result));
+                            FXUtils.showFileInExplorer(result);
+                        } else {
+                            LOG.warning("Failed to export logs", exception);
+                            Controllers.dialog(
+                                    i18n("settings.launcher.launcher_log.export.failed") + "\n" + StringUtils.getStackTrace(exception),
+                                    null,
+                                    MessageType.ERROR
+                            );
+                        }
+                    }, Schedulers.javafx());
+                });
 
-                rootPane.getChildren().addAll(ComponentList.createComponentListTitle(i18n("settings.launcher.language")), languagePaneList);
+                HBox buttonBox = new HBox();
+                buttonBox.setSpacing(10);
+                buttonBox.getChildren().addAll(openLogFolderButton, exportLogPane);
+                BorderPane.setAlignment(buttonBox, Pos.CENTER_RIGHT);
+                debugPane.setRight(buttonBox);
+
+                miscPaneList.getContent().add(debugPane);
             }
 
-            {
-                ComponentList miscPaneList = new ComponentList();
-
-                {
-                    LineToggleButton disableAprilFools = new LineToggleButton();
-                    disableAprilFools.setTitle(i18n("settings.launcher.disable_april_fools"));
-                    disableAprilFools.setSubtitle(i18n("settings.take_effect_after_restart"));
-                    disableAprilFools.selectedProperty().bindBidirectional(settings().disableAprilFoolsProperty());
-                    miscPaneList.getContent().add(disableAprilFools);
-                }
-
-                {
-                    BorderPane debugPane = new BorderPane();
-
-                    Label left = new Label(i18n("settings.launcher.debug"));
-                    BorderPane.setAlignment(left, Pos.CENTER_LEFT);
-                    debugPane.setLeft(left);
-
-                    JFXButton openLogFolderButton = new JFXButton(i18n("settings.launcher.launcher_log.reveal"));
-                    openLogFolderButton.setOnAction(e -> openLogFolder());
-                    openLogFolderButton.getStyleClass().add("jfx-button-border");
-                    if (LOG.getLogFile() == null)
-                        openLogFolderButton.setDisable(true);
-
-                    SpinnerPane exportLogPane = new SpinnerPane();
-
-                    JFXButton logButton = FXUtils.newBorderButton(i18n("settings.launcher.launcher_log.export"));
-                    exportLogPane.setContent(logButton);
-                    logButton.setOnAction(e -> {
-                        exportLogPane.showSpinner();
-                        onExportLogs().whenCompleteAsync((result, exception) -> {
-                            exportLogPane.hideSpinner();
-                            if (exception == null) {
-                                Controllers.dialog(i18n("settings.launcher.launcher_log.export.success", result));
-                                FXUtils.showFileInExplorer(result);
-                            } else {
-                                LOG.warning("Failed to export logs", exception);
-                                Controllers.dialog(
-                                        i18n("settings.launcher.launcher_log.export.failed") + "\n" + StringUtils.getStackTrace(exception),
-                                        null,
-                                        MessageType.ERROR
-                                );
-                            }
-                        }, Schedulers.javafx());
-                    });
-
-                    HBox buttonBox = new HBox();
-                    buttonBox.setSpacing(10);
-                    buttonBox.getChildren().addAll(openLogFolderButton, exportLogPane);
-                    BorderPane.setAlignment(buttonBox, Pos.CENTER_RIGHT);
-                    debugPane.setRight(buttonBox);
-
-                    miscPaneList.getContent().add(debugPane);
-                }
-
-                rootPane.getChildren().addAll(ComponentList.createComponentListTitle(i18n("settings.launcher.misc")), miscPaneList);
-            }
+            rootPane.getChildren().addAll(ComponentList.createComponentListTitle(i18n("settings.launcher.misc")), miscPaneList);
         }
     }
 
     private void openLogFolder() {
         FXUtils.openFolder(LOG.getLogFile().getParent());
+    }
+
+    private void showChangelog() {
+        RemoteVersion latest = UpdateChecker.getLatestVersion();
+        if (latest != null && latest.changelog() != null && !latest.changelog().isBlank()) {
+            Controllers.dialog(latest.changelog().strip(), i18n("update.changelog"), MessageType.INFO);
+        } else if (latest != null && latest.page() != null) {
+            FXUtils.openLink(latest.page());
+        } else {
+            FXUtils.openLink(Metadata.PUBLISH_URL);
+        }
     }
 
     private void onUpdate() {

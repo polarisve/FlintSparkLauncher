@@ -101,7 +101,9 @@ public final class UpdateChecker {
 
         // FSL: Gitee and GitHub are both checked at the same time
         List<String> urls = Metadata.UPDATE_URLS.stream().map(u -> NetworkUtils.withQuery(u, query)).toList();
-        return RemoteVersion.fetch(channel, preview, urls);
+        // FSL: every check also measures the network (a few kilobytes per site), so the site shown
+        // in the settings page and used for the download is the one answering fastest right now.
+        return RemoteVersion.fetch(channel, preview, urls).withFastestSource();
     }
 
     private static boolean isDevelopmentVersion(String version) {
