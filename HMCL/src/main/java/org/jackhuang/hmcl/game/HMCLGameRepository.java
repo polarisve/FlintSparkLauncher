@@ -511,6 +511,29 @@ public final class HMCLGameRepository extends DefaultGameRepository {
         }
     }
 
+    /**
+     * Returns an instance id derived from {@code name} that does not conflict with any existing instance.
+     *
+     * <p>When {@code name} is still free it is returned unchanged; otherwise a numeric suffix such as
+     * {@code name-2} is appended. This lets the same version / modpack be installed several times:
+     * the user keeps the name they typed, only the folder name gets de-duplicated.</p>
+     */
+    public String allocateInstanceId(String name) {
+        if (name == null || name.isBlank())
+            return name;
+
+        String base = name.trim();
+        if (!instanceIdConflicts(base))
+            return base;
+
+        for (int i = 2; i < 10000; i++) {
+            String candidate = base + "-" + i;
+            if (!instanceIdConflicts(candidate))
+                return candidate;
+        }
+        return base + "-" + System.currentTimeMillis();
+    }
+
     public static long getAutoAllocatedMemory(long available, Platform platform) {
         long usable = available - 512 * 1024 * 1024; // Reserve 512 MiB memory for off-heap memory and HMCL itself
         if (usable <= 0) {

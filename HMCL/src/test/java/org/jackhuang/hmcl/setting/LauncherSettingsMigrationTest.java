@@ -177,11 +177,11 @@ public final class LauncherSettingsMigrationTest {
         JsonObject serialized = JsonParser.parseString(launcherSettings.toJson()).getAsJsonObject();
 
         assertEquals(BackgroundType.BUILTIN.name(), settings.get("backgroundType").getAsString());
-        assertEquals(BuiltinBackground.WALLPAPER_2016_02_25.id(), settings.get("builtinBackgroundId").getAsString());
+        assertEquals(BuiltinBackground.FALLBACK.id(), settings.get("builtinBackgroundId").getAsString());
         assertEquals(BackgroundType.BUILTIN, launcherSettings.backgroundTypeProperty().get());
-        assertEquals(BuiltinBackground.WALLPAPER_2016_02_25.id(), launcherSettings.builtinBackgroundIdProperty().get());
+        assertEquals(BuiltinBackground.FALLBACK.id(), launcherSettings.builtinBackgroundIdProperty().get());
         assertEquals(BackgroundType.BUILTIN.name(), serialized.get("backgroundType").getAsString());
-        assertEquals(BuiltinBackground.WALLPAPER_2016_02_25.id(), serialized.get("builtinBackgroundId").getAsString());
+        assertEquals(BuiltinBackground.FALLBACK.id(), serialized.get("builtinBackgroundId").getAsString());
     }
 
     /// Tests that launcher settings serialization preserves a patch-version schema and unknown fields.

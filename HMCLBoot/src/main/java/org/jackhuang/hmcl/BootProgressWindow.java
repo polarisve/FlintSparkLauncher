@@ -27,6 +27,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import java.awt.Dimension;
 import java.awt.Toolkit;
 import java.util.Locale;
@@ -38,9 +39,19 @@ import java.util.ResourceBundle;
 /// a very old Java version. The window is informational only: the user does not have to click anything.
 public final class BootProgressWindow implements JavaRuntimeBootstrap.ProgressListener {
 
+    /// The bar has to be driven at a finer resolution than whole percent, otherwise a 50 MB download
+    /// is painted in ~50 visible hops.
+    private static final int PROGRESS_SCALE = 1000;
+    private static final int FRAME_INTERVAL_MS = 16;
+    private static final double EASING = 0.28;
+
     private final JDialog dialog;
     private final JLabel messageLabel;
     private final JProgressBar progressBar;
+
+    private double shownValue = -1;
+    private int targetValue = -1;
+    private Timer animator;
 
     private BootProgressWindow(ResourceBundle bundle, String note) {
         dialog = new JDialog((java.awt.Frame) null, bundle.getString("boot.java_runtime.title"), false);
@@ -69,7 +80,7 @@ public final class BootProgressWindow implements JavaRuntimeBootstrap.ProgressLi
         panel.add(messageLabel);
         panel.add(Box.createVerticalStrut(6));
 
-        progressBar = new JProgressBar(0, 100);
+        progressBar = new JProgressBar(0, PROGRESS_SCALE);
         progressBar.setStringPainted(true);
         progressBar.setString(bundle.getString("boot.java_runtime.prepare"));
         progressBar.setAlignmentX(JPanel.LEFT_ALIGNMENT);
@@ -103,14 +114,72 @@ public final class BootProgressWindow implements JavaRuntimeBootstrap.ProgressLi
     public void onProgress(long downloaded, long total) {
         SwingUtilities.invokeLater(() -> {
             if (total > 0) {
-                int percent = (int) Math.min(100, downloaded * 100 / total);
-                progressBar.setValue(percent);
-                progressBar.setString(percent + "%  " + formatSize(downloaded) + " / " + formatSize(total));
+                int permille = (int) Math.min(PROGRESS_SCALE, downloaded * PROGRESS_SCALE / total);
+                String text = (permille / 10) + "%  " + formatSize(downloaded) + " / " + formatSize(total);
+                progressBar.setString(text);
+                glideTo(permille);
             } else {
+                stopAnimation();
+                shownValue = -1;
+                targetValue = -1;
                 progressBar.setIndeterminate(true);
                 progressBar.setString(formatSize(downloaded));
             }
         });
+    }
+
+    /// Eases the painted value towards [permille] instead of assigning it, so the bar keeps moving
+    /// even though the download reports its size in coarse, bursty steps.
+    private void glideTo(int permille) {
+        int target = Math.max(0, Math.min(PROGRESS_SCALE, permille));
+
+        // First sample, or the reported size went backwards after a source switch: snap so the bar
+        // never appears to rewind slowly.
+        if (shownValue < 0 || target < shownValue) {
+            stopAnimation();
+            shownValue = target;
+            targetValue = target;
+            progressBar.setValue(target);
+            return;
+        }
+
+        targetValue = target;
+        if (shownValue >= target) {
+            return;
+        }
+
+        if (animator == null) {
+            animator = new Timer(FRAME_INTERVAL_MS, e -> advance());
+            animator.setCoalesce(true);
+        }
+        if (!animator.isRunning()) {
+            animator.start();
+        }
+    }
+
+    /// Runs on the EDT.
+    private void advance() {
+        if (targetValue < 0) {
+            stopAnimation();
+            return;
+        }
+
+        double delta = targetValue - shownValue;
+        if (Math.abs(delta) < 0.5) {
+            shownValue = targetValue;
+            stopAnimation();
+            progressBar.setValue(targetValue);
+            return;
+        }
+
+        shownValue += delta * EASING;
+        progressBar.setValue((int) Math.round(shownValue));
+    }
+
+    private void stopAnimation() {
+        if (animator != null && animator.isRunning()) {
+            animator.stop();
+        }
     }
 
     /// Closes the window. Safe to call more than once.

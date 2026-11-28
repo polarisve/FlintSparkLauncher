@@ -42,6 +42,7 @@
 package org.jackhuang.hmcl.util;
 
 import org.jackhuang.hmcl.EntryPoint;
+import org.jackhuang.hmcl.DownloadProgressWindow;
 import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.ChecksumMismatchException;
@@ -52,8 +53,6 @@ import org.jackhuang.hmcl.util.platform.Platform;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 import java.io.*;
 import java.net.URL;
 import java.nio.file.Files;
@@ -100,11 +99,26 @@ public final class SelfDependencyPatcher {
         }
     }
 
+    /// Receives the progress of a JavaFX module download that runs inside someone else's window.
+    public interface FetchListener {
+        /// Called once before the first module is fetched.
+        void onStart(int total);
+
+        /// Called after a module has been fetched and verified.
+        void onProgress(String module, int completed, int total);
+    }
+
     private static final class DependencyDescriptor {
         private static final String DEPENDENCIES_LIST_FILE = "/assets/openjfx-dependencies.json";
         private static final Path DEPENDENCIES_DIR_PATH = Metadata.DEPENDENCIES_DIRECTORY.resolve(Platform.CURRENT_PLATFORM.toString()).resolve("openjfx");
 
         static List<DependencyDescriptor> readDependencies() {
+            return readDependencies(JavaRuntime.CURRENT_VERSION);
+        }
+
+        /// Reads the modules matching the platform and the given Java feature version, so that JavaFX
+        /// can be fetched ahead of time for a runtime FSL is about to install.
+        static List<DependencyDescriptor> readDependencies(int javaFeatureVersion) {
             //noinspection ConstantConditions
             try (Reader reader = new InputStreamReader(SelfDependencyPatcher.class.getResourceAsStream(DEPENDENCIES_LIST_FILE), UTF_8)) {
                 Map<String, Map<String, List<DependencyDescriptor>>> allDependencies =
@@ -113,7 +127,7 @@ public final class SelfDependencyPatcher {
                 if (platform == null)
                     return null;
 
-                if (JavaRuntime.CURRENT_VERSION >= 23) {
+                if (javaFeatureVersion >= 23) {
                     List<DependencyDescriptor> modernDependencies = platform.get("modern");
                     if (modernDependencies != null)
                         return modernDependencies;
@@ -206,6 +220,119 @@ public final class SelfDependencyPatcher {
         LOG.info(" - Done!");
     }
 
+    /// Whether the JavaFX modules FSL needs are still missing for the given Java feature version.
+    ///
+    /// Only the cache is inspected, so this can run before the matching runtime is installed.
+    public static boolean isMissingDependencies(int javaFeatureVersion) {
+        List<DependencyDescriptor> dependencies = DependencyDescriptor.readDependencies(javaFeatureVersion);
+        return dependencies != null && !missingOf(dependencies).isEmpty();
+    }
+
+    /// Downloads the JavaFX modules FSL needs without opening a window of its own.
+    ///
+    /// A fresh installation has to fetch both the Java runtime and the JavaFX modules. Fetching them
+    /// back to back inside the caller's window is what keeps the first start down to a single window
+    /// instead of showing one download after the other.
+    ///
+    /// @param javaFeatureVersion the Java feature version FSL will run on, which picks the module set
+    /// @param listener           progress receiver, may be `null`
+    /// @return the number of downloaded modules, `0` when nothing was missing
+    public static int downloadMissingDependencies(int javaFeatureVersion, FetchListener listener) throws IOException {
+        List<DependencyDescriptor> dependencies = DependencyDescriptor.readDependencies(javaFeatureVersion);
+        if (dependencies == null)
+            return 0;
+
+        List<DependencyDescriptor> missing = missingOf(dependencies);
+        if (missing.isEmpty())
+            return 0;
+
+        if (listener != null)
+            listener.onStart(missing.size());
+
+        Files.createDirectories(DependencyDescriptor.DEPENDENCIES_DIR_PATH);
+
+        byte[] buffer = new byte[IOUtils.DEFAULT_BUFFER_SIZE];
+        MessageDigest digest = DigestUtils.getDigest("SHA-1");
+
+        List<Repository> order = "CN".equalsIgnoreCase(System.getProperty("user.country", ""))
+                ? List.of(Repository.TENCENTCLOUD_MIRROR, Repository.MAVEN_CENTRAL)
+                : List.of(Repository.MAVEN_CENTRAL, Repository.TENCENTCLOUD_MIRROR);
+
+        int completed = 0;
+        for (DependencyDescriptor dependency : missing) {
+            IOException failure = null;
+
+            for (Repository repository : order) {
+                String url = repository.resolveDependencyURL(dependency);
+                LOG.info("Downloading " + url);
+                try {
+                    try (InputStream is = new URL(url).openStream();
+                         OutputStream os = Files.newOutputStream(dependency.localPath())) {
+                        int read;
+                        while ((read = is.read(buffer, 0, buffer.length)) >= 0)
+                            os.write(buffer, 0, read);
+                    }
+                    verifyChecksum(dependency, digest, buffer);
+                    failure = null;
+                    break;
+                } catch (IOException e) {
+                    failure = e;
+                    try {
+                        Files.deleteIfExists(dependency.localPath());
+                    } catch (IOException suppressed) {
+                        e.addSuppressed(suppressed);
+                    }
+                }
+            }
+
+            if (failure != null)
+                throw failure;
+
+            completed++;
+            if (listener != null)
+                listener.onProgress(dependency.module, completed, missing.size());
+        }
+
+        return completed;
+    }
+
+    /// Lists the modules that are absent from the cache or do not match their checksum.
+    private static List<DependencyDescriptor> missingOf(List<DependencyDescriptor> dependencies) {
+        List<DependencyDescriptor> missing = new ArrayList<>();
+        MessageDigest digest = DigestUtils.getDigest("SHA-1");
+        byte[] buffer = new byte[IOUtils.DEFAULT_BUFFER_SIZE];
+
+        for (DependencyDescriptor dependency : dependencies) {
+            if (!Files.exists(dependency.localPath())) {
+                missing.add(dependency);
+                continue;
+            }
+
+            try {
+                verifyChecksum(dependency, digest, buffer);
+            } catch (IOException e) {
+                LOG.warning("Corrupted dependency " + dependency.filename() + ": " + e.getMessage());
+                missing.add(dependency);
+            }
+        }
+
+        return missing;
+    }
+
+    private static void verifyChecksum(DependencyDescriptor dependency, MessageDigest digest, byte[] buffer) throws IOException {
+        digest.reset();
+        try (InputStream is = Files.newInputStream(dependency.localPath())) {
+            int read;
+            while ((read = is.read(buffer, 0, buffer.length)) > -1) {
+                digest.update(buffer, 0, read);
+            }
+        }
+
+        String sha1 = HexFormat.of().formatHex(digest.digest());
+        if (!dependency.sha1().equalsIgnoreCase(sha1))
+            throw new ChecksumMismatchException("SHA-1", dependency.sha1(), sha1);
+    }
+
     private Repository showChooseRepositoryDialog() {
         final JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
@@ -282,10 +409,13 @@ public final class SelfDependencyPatcher {
             AtomicBoolean showDetails = new AtomicBoolean();
 
             ProgressFrame dialog;
-            try {
-                dialog = new SwingProgressFrame(i18n("download.javafx"));
-            } catch (HeadlessException e) {
-                LOG.warning("Failed to open dialog", e);
+            DownloadProgressWindow window = DownloadProgressWindow.create(i18n("download.javafx"));
+            if (window != null) {
+                // The styled card is the only download window FSL ever shows: the plain HMCL frame
+                // with its title bar and buttons must never appear, not even while JavaFX is missing.
+                dialog = new StyledProgressFrame(window, dependencies.size() + 1);
+            } else {
+                LOG.warning("Failed to open the download window, downloading silently");
                 dialog = new FakeProgressFrame();
             }
 
@@ -420,75 +550,51 @@ public final class SelfDependencyPatcher {
         void dispose();
     }
 
-    public static final class SwingProgressFrame extends JDialog implements ProgressFrame {
+    /// Drives the styled download card through the interface the fetch loop understands.
+    ///
+    /// The card carries no cancel or change-source buttons, so those hooks are accepted and
+    /// ignored: a failing mirror is retried with the remaining repositories instead, and a total
+    /// failure is handed to the repair flow, which downloads from every mirror in turn.
+    public static final class StyledProgressFrame implements ProgressFrame {
 
-        private final JProgressBar progressBar;
-        private final JLabel progressText;
-        private final JButton btnChangeSource;
-        private final JButton btnCancel;
+        private final DownloadProgressWindow window;
+        private int maximum;
+        private int value;
 
-        public SwingProgressFrame(String title) {
-            JPanel panel = new JPanel();
-
-            setResizable(false);
-            setTitle(title);
-            setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-            setBounds(100, 100, 500, 200);
-            setContentPane(panel);
-            setLocationRelativeTo(null);
-
-            JPanel content = new JPanel();
-            content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
-
-            for (String note : i18n("download.javafx.notes").split("\n")) {
-                content.add(new JLabel(note));
-            }
-            content.add(new JLabel("<html><br/></html>"));
-            progressText = new JLabel(i18n("download.javafx.prepare"));
-            content.add(progressText);
-            progressBar = new JProgressBar();
-            content.add(progressBar);
-
-            final JPanel buttonBar = new JPanel();
-            btnChangeSource = new JButton(i18n("button.change_source"));
-            btnCancel = new JButton(i18n("button.cancel"));
-            buttonBar.add(btnChangeSource);
-            buttonBar.add(btnCancel);
-
-            panel.setLayout(new BorderLayout());
-            panel.setBorder(BorderFactory.createEmptyBorder(10, 5, 0, 5));
-            panel.add(content, BorderLayout.CENTER);
-            panel.add(buttonBar, BorderLayout.SOUTH);
+        StyledProgressFrame(DownloadProgressWindow window, int maximum) {
+            this.window = window;
+            this.maximum = maximum;
         }
 
         public void setCurrent(String component) {
-            progressText.setText(i18n("download.javafx.component", component));
+            window.setStatus(i18n("download.javafx.component", component));
         }
 
         public void setProgressMaximum(int total) {
-            progressBar.setMaximum(total);
+            maximum = total;
         }
 
         public void setProgress(int n) {
-            progressBar.setValue(n);
+            value = n;
+            window.setProgress(maximum > 0 ? (double) value / maximum : -1);
         }
 
         public void incrementProgress() {
-            progressBar.setValue(progressBar.getValue() + 1);
+            value++;
+            window.setProgress(maximum > 0 ? (double) value / maximum : -1);
         }
 
         public void setOnCancel(Runnable action) {
-            btnCancel.addActionListener(e -> action.run());
-            addWindowListener(new WindowAdapter() {
-                @Override
-                public void windowClosing(WindowEvent e) {
-                    action.run();
-                }
-            });
         }
 
         public void setOnChangeSource(Runnable action) {
-            btnChangeSource.addActionListener(e -> action.run());
+        }
+
+        public void setVisible(boolean visible) {
+        }
+
+        public void dispose() {
+            window.dispose();
         }
     }
 

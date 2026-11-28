@@ -168,6 +168,9 @@ public final class EntryPoint {
 
     private static void checkJavaFX(String[] args) {
         try {
+            // Fetch the modules first so that the patcher never has to open its own plain window:
+            // every download the first start needs happens in the styled progress window.
+            JavaRuntimeRepair.prepareJavaFx();
             SelfDependencyPatcher.patch();
         } catch (SelfDependencyPatcher.PatchException e) {
             LOG.error("Unable to patch JVM", e);

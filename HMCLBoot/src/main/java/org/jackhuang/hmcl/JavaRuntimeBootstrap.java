@@ -17,9 +17,11 @@
  */
 package org.jackhuang.hmcl;
 
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.lang.management.ManagementFactory;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -29,12 +31,18 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -66,6 +74,52 @@ public final class JavaRuntimeBootstrap {
 
     private static final String MICROSOFT_JDK_URL = "https://aka.ms/download-jdk/microsoft-jdk-%d-%s.zip";
     private static final String ADOPTIUM_URL = "https://api.adoptium.net/v3/binary/latest/%d/ga/%s/%s/jre/hotspot/normal/eclipse?project=jdk";
+    private static final String AZUL_API_URL = "https://api.azul.com/metadata/v1/zulu/packages/?java_version=%d&os=%s&arch=%s"
+            + "&archive_type=zip&java_package_type=jre&latest=true&release_status=ga&availability_types=CA&page_size=1";
+    private static final Pattern AZUL_DOWNLOAD = Pattern.compile("\"download_url\":\"([^\"]+)\"");
+
+    /// Domestic Adoptium mirrors, all raced in parallel. A 46 MB JRE takes minutes over `aka.ms`
+    /// (~1.7 MB/s here) but a couple of seconds from these mirrors; single-connection throughput
+    /// swings between 3 and 35 MB/s from hour to hour, so the downloader splits the archive into
+    /// segments and pulls every segment from a different mirror at the same time. Mirrors whose WAF
+    /// rejects us (TUNA, BFSU answer 403 to some clients, USTC throttles bursts with 429) simply
+    /// lose the race, which is why keeping them costs nothing.
+    private static final String[] ADOPTIUM_MIRRORS = {
+            "https://mirror.nju.edu.cn/adoptium/",
+            "https://mirrors.nju.edu.cn/adoptium/",
+            "https://mirrors.lzu.edu.cn/adoptium/",
+            "https://mirrors.tuna.tsinghua.edu.cn/Adoptium/",
+            "https://mirrors.bfsu.edu.cn/Adoptium/",
+            "https://mirrors.ustc.edu.cn/adoptium/",
+            "https://mirrors.cernet.edu.cn/adoptium/",
+            "https://mirrors.huaweicloud.com/adoptium/",
+            "https://mirrors.aliyun.com/adoptium/",
+            "https://mirrors.cloud.tencent.com/adoptium/"
+    };
+
+    /// Adoptium mirrors come in two flavours: the flat `21/jre/x64/windows/` tree and the
+    /// `releases/temurin21-binaries/LatestRelease/` tree. Each flavour lists the same archive under
+    /// the same file name everywhere, so segments pulled from different mirrors stay interchangeable.
+    private static final String[] ADOPTIUM_LAYOUTS = {
+            "%1$s%2$d/jre/%3$s/%4$s/",
+            "%1$sreleases/temurin%2$d-binaries/LatestRelease/"
+    };
+
+    /// Upstream fallbacks, used only when every mirror failed. They serve different builds, so each
+    /// one is a full standalone download rather than a segment source.
+
+    private static final Pattern ADOPTIUM_ARCHIVE = Pattern.compile(
+            "href=[\"'](OpenJDK\\d+U-jre_[A-Za-z0-9]+_[A-Za-z]+_hotspot_[0-9._]+\\.zip)[\"']");
+
+    /// Segments pulled in parallel. Six keeps every mirror busy without tripping the 429 throttling
+    /// that burst-open connections trigger.
+    private static final int DOWNLOAD_SEGMENTS = 6;
+    private static final long SLOW_WINDOW_MILLIS = 5000;
+    private static final long SLOW_WINDOW_BYTES = 512 * 1024;
+
+    /// Mirror lookups already performed, keyed by `featureVersion/arch/platform`, to avoid one HTTP
+    /// round trip per start attempt.
+    private static final Map<String, List<SourceGroup>> MIRROR_CACHE = new LinkedHashMap<>();
 
     private JavaRuntimeBootstrap() {
     }
@@ -460,10 +514,13 @@ public final class JavaRuntimeBootstrap {
 
     /// Downloads a complete runtime of `featureVersion` into [`installRoot`] and returns it.
     ///
-    /// Mirrors are tried in order; every failure is collected so the caller can show a reason.
+    /// Mirrors are raced segment by segment first; every failure is collected so the caller can show
+    /// a reason, and the upstream sources are only used once every mirror is exhausted.
     public static Candidate download(int featureVersion, ProgressListener listener) throws IOException {
         Path root = installRoot();
         String arch = architectureName();
+        String os = osName();
+        String platform = os.contains("windows") ? "windows" : os.contains("mac") ? "mac" : "linux";
 
         Path target = root.resolve("jre-" + featureVersion + "-" + arch);
         Candidate existing = inspect(target);
@@ -471,36 +528,28 @@ public final class JavaRuntimeBootstrap {
             return existing;
         }
 
+        Files.createDirectories(root);
         List<String> failures = new ArrayList<>();
-        for (String url : downloadUrls(featureVersion, arch)) {
-            Path archive = root.resolve(".fsl-jre-" + featureVersion + "-" + arch + ".zip");
-            Path staging = root.resolve(".fsl-extract-" + UUID.randomUUID());
+
+        for (SourceGroup group : mirrorGroups(featureVersion, arch, platform)) {
+            try {
+                notifyMessage(listener, group.name());
+                Candidate candidate = install(group, featureVersion, arch, root, target, listener);
+                if (candidate != null)
+                    return candidate;
+            } catch (IOException e) {
+                failures.add(group.name() + " -> " + e.getMessage());
+            }
+        }
+
+        for (String url : upstreamUrls(featureVersion, arch)) {
             try {
                 notifyMessage(listener, url);
-                Files.createDirectories(root);
-                downloadFile(url, archive, listener);
-
-                notifyMessage(listener, "extracting");
-                extract(archive, staging, listener);
-
-                Path home = findRuntimeHome(staging);
-                if (home == null)
-                    throw new IOException("The downloaded archive does not contain a Java runtime");
-
-                deleteRecursively(target);
-                Files.createDirectories(target);
-                moveContents(home, target);
-                deleteRecursively(staging);
-                Files.deleteIfExists(archive);
-
-                Candidate candidate = inspect(target);
-                if (candidate == null)
-                    throw new IOException("The downloaded runtime is incomplete");
-                return candidate;
+                Candidate candidate = install(url, featureVersion, arch, root, target, listener);
+                if (candidate != null)
+                    return candidate;
             } catch (IOException e) {
                 failures.add(url + " -> " + e.getMessage());
-                deleteQuietly(staging);
-                deleteQuietly(archive);
             }
         }
 
@@ -508,6 +557,53 @@ public final class JavaRuntimeBootstrap {
         for (String failure : failures)
             message.append(failure).append('\n');
         throw new IOException(message.toString().trim());
+    }
+
+    private static Candidate install(SourceGroup group, int featureVersion, String arch, Path root,
+                                     Path target, ProgressListener listener) throws IOException {
+        Path archive = root.resolve(".fsl-jre-" + featureVersion + "-" + arch + ".zip");
+        Path staging = root.resolve(".fsl-extract-" + UUID.randomUUID());
+        try {
+            downloadSegmented(group, archive, listener);
+            return finish(archive, staging, target, listener);
+        } finally {
+            deleteQuietly(staging);
+            deleteQuietly(archive);
+        }
+    }
+
+    private static Candidate install(String url, int featureVersion, String arch, Path root,
+                                     Path target, ProgressListener listener) throws IOException {
+        Path archive = root.resolve(".fsl-jre-" + featureVersion + "-" + arch + ".zip");
+        Path staging = root.resolve(".fsl-extract-" + UUID.randomUUID());
+        try {
+            downloadFile(url, archive, listener);
+            return finish(archive, staging, target, listener);
+        } finally {
+            deleteQuietly(staging);
+            deleteQuietly(archive);
+        }
+    }
+
+    /// Unpacks a freshly downloaded archive into `target`, replacing whatever was there before.
+    private static Candidate finish(Path archive, Path staging, Path target, ProgressListener listener)
+            throws IOException {
+        notifyMessage(listener, "extracting");
+        extract(archive, staging, listener);
+
+        Path home = findRuntimeHome(staging);
+        if (home == null)
+            throw new IOException("The downloaded archive does not contain a Java runtime");
+
+        deleteRecursively(target);
+        Files.createDirectories(target);
+        moveContents(home, target);
+        deleteRecursively(staging);
+
+        Candidate candidate = inspect(target);
+        if (candidate == null)
+            throw new IOException("The downloaded runtime is incomplete");
+        return candidate;
     }
 
     private static void notifyMessage(ProgressListener listener, String message) {
@@ -528,23 +624,352 @@ public final class JavaRuntimeBootstrap {
         }
     }
 
-    private static List<String> downloadUrls(int featureVersion, String arch) {
+    /// One archive name that several mirrors all publish, so segments can be pulled from each of them.
+    private static final class SourceGroup {
+        final String fileName;
+        final List<String> urls;
+        final long size;
+
+        SourceGroup(String fileName, List<String> urls, long size) {
+            this.fileName = fileName;
+            this.urls = urls;
+            this.size = size;
+        }
+
+        String name() {
+            return urls.isEmpty() ? fileName : urls.get(0);
+        }
+    }
+
+    /// Enumerates the mirror groups able to serve the requested runtime, one per mirror layout.
+    ///
+    /// A group only survives when at least one mirror actually serves its archive, and every mirror
+    /// that does serve it joins the group so the downloader can split the archive across hosts.
+    private static List<SourceGroup> mirrorGroups(int featureVersion, String arch, String platform) {
+        String mirrorArch = "arm64".equals(arch) ? "aarch64" : arch;
+        String key = featureVersion + "/" + mirrorArch + "/" + platform;
+        synchronized (MIRROR_CACHE) {
+            List<SourceGroup> cached = MIRROR_CACHE.get(key);
+            if (cached != null)
+                return cached;
+        }
+
+        List<SourceGroup> groups = new ArrayList<>();
+        for (String layout : ADOPTIUM_LAYOUTS) {
+            try {
+                SourceGroup group = resolveGroup(layout, featureVersion, mirrorArch, platform);
+                if (group != null)
+                    groups.add(group);
+            } catch (Throwable ignored) {
+            }
+        }
+
+        synchronized (MIRROR_CACHE) {
+            MIRROR_CACHE.put(key, groups);
+        }
+        return groups;
+    }
+
+    private static SourceGroup resolveGroup(final String layout, final int featureVersion, final String arch,
+                                            final String platform) {
+        final List<String> directories = new ArrayList<>();
+        for (String mirror : ADOPTIUM_MIRRORS)
+            directories.add(String.format(Locale.ROOT, layout, mirror, featureVersion, arch, platform));
+
+        // Listing and probing run as one pipeline per mirror: a host that answers its listing is asked
+        // for the archive immediately instead of waiting for the slowest mirror to finish.
+        final String[] fileName = new String[1];
+        final List<String> urls = Collections.synchronizedList(new ArrayList<String>());
+        final long[] size = new long[1];
+        final CountDownLatch done = new CountDownLatch(directories.size());
+        for (int i = 0; i < directories.size(); i++) {
+            final String directory = directories.get(i);
+            daemon("fsl-jre-mirror-" + i, new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        String name = listingArchive(directory);
+                        if (name == null)
+                            return;
+                        synchronized (fileName) {
+                            if (fileName[0] == null)
+                                fileName[0] = name;
+                        }
+                        // Only hosts publishing the exact same archive can share the segments.
+                        if (!name.equals(fileName[0]))
+                            return;
+                        long length = probeArchive(directory + name);
+                        if (length > 0) {
+                            urls.add(directory + name);
+                            synchronized (size) {
+                                if (size[0] <= 0)
+                                    size[0] = length;
+                            }
+                        }
+                    } finally {
+                        done.countDown();
+                    }
+                }
+            }).start();
+        }
+        awaitEnough(done, urls, 3, 6000);
+
+        if (fileName[0] == null || urls.isEmpty())
+            return null;
+        return new SourceGroup(fileName[0], new ArrayList<>(urls), size[0]);
+    }
+
+    private static Thread daemon(String name, final Runnable body) {
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    body.run();
+                } catch (Throwable ignored) {
+                    // Probes are best effort: a host that answers nothing simply loses the race.
+                }
+            }
+        }, name);
+        thread.setDaemon(true);
+        return thread;
+    }
+
+    /// Waits until `items` holds `enough` results, every task finished, or the timeout elapsed.
+    private static void awaitEnough(CountDownLatch latch, List<?> items, int enough, long timeoutMillis) {
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (System.currentTimeMillis() < deadline) {
+            if (items.size() >= enough || latch.getCount() == 0)
+                return;
+            try {
+                latch.await(50, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    /// Reads a mirror directory listing and returns the newest JRE archive published there.
+    private static String listingArchive(String directory) {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(directory).openConnection();
+            connection.setConnectTimeout(3000);
+            connection.setReadTimeout(4000);
+            connection.setRequestProperty("User-Agent", "FSL/" + launcherVersion());
+            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK)
+                return null;
+
+            StringBuilder html = new StringBuilder();
+            try (InputStream input = connection.getInputStream()) {
+                byte[] buffer = new byte[16 * 1024];
+                int read;
+                while ((read = input.read(buffer)) >= 0 && html.length() < 512 * 1024)
+                    html.append(new String(buffer, 0, read, "UTF-8"));
+            }
+
+            Matcher matcher = ADOPTIUM_ARCHIVE.matcher(html);
+            String newest = null;
+            while (matcher.find())
+                newest = matcher.group(1);
+            return newest;
+        } catch (Throwable ignored) {
+            return null;
+        } finally {
+            if (connection != null)
+                connection.disconnect();
+        }
+    }
+
+    /// Returns the archive length when the mirror honours range requests, `-1` otherwise.
+    private static long probeArchive(String url) {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setConnectTimeout(2500);
+            connection.setReadTimeout(3000);
+            connection.setRequestProperty("User-Agent", "FSL/" + launcherVersion());
+            connection.setRequestProperty("Range", "bytes=0-0");
+            if (connection.getResponseCode() != 206)
+                return -1;
+            String range = connection.getHeaderField("Content-Range");
+            if (range == null)
+                return -1;
+            int slash = range.lastIndexOf('/');
+            if (slash < 0 || slash + 1 >= range.length())
+                return -1;
+            return Long.parseLong(range.substring(slash + 1).trim());
+        } catch (Throwable ignored) {
+            return -1;
+        } finally {
+            if (connection != null)
+                connection.disconnect();
+        }
+    }
+
+    /// Fetches the archive in parallel segments, each one from a different mirror, so the transfer
+    /// runs at the sum of the mirrors' bandwidth instead of the speed of whichever host answers first.
+    private static void downloadSegmented(final SourceGroup group, final Path archive,
+                                          final ProgressListener listener) throws IOException {
+        final long size = group.size;
+        int segments = Math.min(DOWNLOAD_SEGMENTS, group.urls.size() * 2);
+        if (size > 0) {
+            long perSegment = Math.max(2L * 1024 * 1024, size / segments);
+            segments = (int) Math.max(1, Math.min(segments, (size + perSegment - 1) / perSegment));
+        }
+        if (size <= 0 || group.urls.size() < 2 || segments < 2) {
+            downloadFile(group.urls.get(0), archive, listener);
+            return;
+        }
+
+        RandomAccessFile file = new RandomAccessFile(archive.toFile(), "rw");
+        try {
+            file.setLength(size);
+            final RandomAccessFile raf = file;
+            final long chunk = size / segments + 1;
+            final AtomicLong downloaded = new AtomicLong();
+            final List<Throwable> errors = Collections.synchronizedList(new ArrayList<Throwable>());
+            notifyProgress(listener, 0, size);
+            runParallel(segments, 0, new ParallelBody() {
+                @Override
+                public void run(int index) {
+                    long start = index * chunk;
+                    if (start >= size)
+                        return;
+                    long end = Math.min(size - 1, start + chunk - 1);
+                    Throwable failure = null;
+                    for (int attempt = 0; attempt < group.urls.size(); attempt++) {
+                        String url = group.urls.get((index + attempt) % group.urls.size());
+                        try {
+                            downloadSegment(url, start, end, raf, downloaded, listener, size);
+                            failure = null;
+                            break;
+                        } catch (Throwable error) {
+                            // A single mirror can drop or throttle a segment; the next host takes over.
+                            failure = error;
+                        }
+                    }
+                    if (failure != null)
+                        errors.add(failure);
+                }
+            });
+            if (!errors.isEmpty()) {
+                Throwable error = errors.get(0);
+                throw error instanceof IOException ? (IOException) error : new IOException(error);
+            }
+        } finally {
+            file.close();
+        }
+    }
+
+    private static void downloadSegment(String url, long start, long end, RandomAccessFile raf,
+                                        AtomicLong downloaded, ProgressListener listener, long size)
+            throws IOException {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setConnectTimeout(8000);
+            connection.setReadTimeout(30000);
+            connection.setRequestProperty("User-Agent", "FSL/" + launcherVersion());
+            connection.setRequestProperty("Range", "bytes=" + start + "-" + end);
+            int code = connection.getResponseCode();
+            if (code != 206)
+                throw new IOException("HTTP " + code + " from " + url);
+
+            byte[] buffer = new byte[256 * 1024];
+            long position = start;
+            long reported = 0;
+            long windowStart = System.currentTimeMillis();
+            long windowBytes = 0;
+            try (InputStream input = connection.getInputStream()) {
+                int read;
+                while ((read = input.read(buffer)) >= 0) {
+                    synchronized (raf) {
+                        raf.seek(position);
+                        raf.write(buffer, 0, read);
+                    }
+                    position += read;
+                    windowBytes += read;
+                    long total = downloaded.addAndGet(read);
+                    if (total - reported >= 1024 * 1024) {
+                        reported = total;
+                        notifyProgress(listener, total, size);
+                    }
+                    // A throttled mirror must lose the race instead of holding the whole download hostage.
+                    long elapsed = System.currentTimeMillis() - windowStart;
+                    if (elapsed >= SLOW_WINDOW_MILLIS) {
+                        if (windowBytes < SLOW_WINDOW_BYTES)
+                            throw new IOException("Slow mirror: " + windowBytes + " bytes in " + elapsed + "ms from " + url);
+                        windowStart = System.currentTimeMillis();
+                        windowBytes = 0;
+                    }
+                }
+            }
+            if (position != end + 1)
+                throw new IOException("Short segment from " + url + ": " + (position - start) + " bytes");
+        } finally {
+            if (connection != null)
+                connection.disconnect();
+        }
+    }
+
+    private interface ParallelBody {
+        void run(int index);
+    }
+
+    /// Runs `count` bodies on daemon threads and waits up to `timeoutMillis` for all of them.
+    private static void runParallel(final int count, long timeoutMillis, final ParallelBody body) {
+        if (count <= 0)
+            return;
+        final CountDownLatch latch = new CountDownLatch(count);
+        for (int i = 0; i < count; i++) {
+            final int index = i;
+            Thread thread = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        body.run(index);
+                    } catch (Throwable ignored) {
+                        // Each body reports its own failures through the shared state.
+                    } finally {
+                        latch.countDown();
+                    }
+                }
+            }, "fsl-jre-download-" + i);
+            thread.setDaemon(true);
+            thread.start();
+        }
+        try {
+            if (timeoutMillis > 0)
+                latch.await(timeoutMillis, TimeUnit.MILLISECONDS);
+            else
+                latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /// Upstream sources, used only when no mirror could serve the runtime.
+    private static List<String> upstreamUrls(int featureVersion, String arch) {
         List<String> urls = new ArrayList<>();
         String os = osName();
 
         if (os.contains("windows")) {
             if ("x86".equals(arch)) {
-                urls.add(String.format(ADOPTIUM_URL, featureVersion, "windows", "x86"));
+                urls.add(String.format(Locale.ROOT, ADOPTIUM_URL, featureVersion, "windows", "x86"));
             } else if ("arm64".equals(arch)) {
-                urls.add(String.format(MICROSOFT_JDK_URL, featureVersion, "windows-aarch64"));
-                urls.add(String.format(ADOPTIUM_URL, featureVersion, "windows", "aarch64"));
+                urls.add(String.format(Locale.ROOT, MICROSOFT_JDK_URL, featureVersion, "windows-aarch64"));
+                urls.add(String.format(Locale.ROOT, ADOPTIUM_URL, featureVersion, "windows", "aarch64"));
             } else {
-                urls.add(String.format(MICROSOFT_JDK_URL, featureVersion, "windows-x64"));
-                urls.add(String.format(ADOPTIUM_URL, featureVersion, "windows", "x64"));
+                urls.add(String.format(Locale.ROOT, MICROSOFT_JDK_URL, featureVersion, "windows-x64"));
+                urls.add(String.format(Locale.ROOT, ADOPTIUM_URL, featureVersion, "windows", "x64"));
+                String azul = azulUrl(featureVersion, arch);
+                if (azul != null)
+                    urls.add(azul);
             }
         } else if (os.contains("mac")) {
             String adoptiumArch = "arm64".equals(arch) ? "aarch64" : "x64";
-            urls.add(String.format(ADOPTIUM_URL, featureVersion, "mac", adoptiumArch));
+            urls.add(String.format(Locale.ROOT, ADOPTIUM_URL, featureVersion, "mac", adoptiumArch));
         } else {
             String adoptiumArch;
             switch (arch) {
@@ -558,10 +983,55 @@ public final class JavaRuntimeBootstrap {
                     adoptiumArch = "x64";
                     break;
             }
-            urls.add(String.format(ADOPTIUM_URL, featureVersion, "linux", adoptiumArch));
+            urls.add(String.format(Locale.ROOT, ADOPTIUM_URL, featureVersion, "linux", adoptiumArch));
         }
 
         return urls;
+    }
+
+    private static String azulUrl(int featureVersion, String arch) {
+        String azulArch;
+        if ("arm64".equals(arch))
+            azulArch = "aarch64";
+        else if ("x86".equals(arch))
+            azulArch = "x86";
+        else
+            azulArch = "x64";
+
+        String listing = httpText(String.format(Locale.ROOT, AZUL_API_URL, featureVersion, "windows", azulArch), 4000, 5000);
+        if (listing == null)
+            return null;
+
+        Matcher matcher = AZUL_DOWNLOAD.matcher(listing);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    /// Reads a small metadata response as text, returning `null` instead of throwing.
+    private static String httpText(String url, int connectTimeout, int readTimeout) {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setConnectTimeout(connectTimeout);
+            connection.setReadTimeout(readTimeout);
+            connection.setRequestProperty("User-Agent", "FSL/" + launcherVersion());
+            connection.setInstanceFollowRedirects(true);
+            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK)
+                return null;
+
+            try (InputStream input = connection.getInputStream()) {
+                java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                byte[] chunk = new byte[8192];
+                int read;
+                while ((read = input.read(chunk)) >= 0 && buffer.size() < 256 * 1024)
+                    buffer.write(chunk, 0, read);
+                return new String(buffer.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Throwable ignored) {
+            return null;
+        } finally {
+            if (connection != null)
+                connection.disconnect();
+        }
     }
 
     private static String architectureName() {
@@ -609,14 +1079,14 @@ public final class JavaRuntimeBootstrap {
 
             try (InputStream input = connection.getInputStream();
                  OutputStream output = Files.newOutputStream(target)) {
-                byte[] buffer = new byte[64 * 1024];
+                byte[] buffer = new byte[256 * 1024];
                 long downloaded = 0;
                 int read;
                 long lastReport = 0;
                 while ((read = input.read(buffer)) >= 0) {
                     output.write(buffer, 0, read);
                     downloaded += read;
-                    if (downloaded - lastReport >= 256 * 1024) {
+                    if (downloaded - lastReport >= 512 * 1024) {
                         lastReport = downloaded;
                         notifyProgress(listener, downloaded, total);
                     }
@@ -644,7 +1114,7 @@ public final class JavaRuntimeBootstrap {
 
     private static void extract(Path archive, Path destination, ProgressListener listener) throws IOException {
         Files.createDirectories(destination);
-        byte[] buffer = new byte[64 * 1024];
+        byte[] buffer = new byte[128 * 1024];
         long total = Files.size(archive);
         long processed = 0;
 
@@ -664,7 +1134,7 @@ public final class JavaRuntimeBootstrap {
                 if (parent != null)
                     Files.createDirectories(parent);
 
-                try (OutputStream output = Files.newOutputStream(target)) {
+                try (OutputStream output = new BufferedOutputStream(Files.newOutputStream(target), 128 * 1024)) {
                     int read;
                     while ((read = zip.read(buffer)) >= 0) {
                         output.write(buffer, 0, read);

@@ -63,9 +63,9 @@ public final class RemoteModpackPage extends ModpackPage {
             txtModpackName.setDisable(true);
         } else {
             txtModpackName.setText(LocalModpackPage.processModpackName(manifest.getName()));
+            // FSL: installing a modpack twice is allowed; the instance name is de-duplicated in onInstall()
             txtModpackName.getValidators().addAll(
                     new RequiredValidator(),
-                    new Validator(i18n("install.new_game.already_exists"), str -> !repository.instanceIdConflicts(str)),
                     new Validator(i18n("install.new_game.malformed"), HMCLGameRepository::isValidInstanceId));
         }
 
@@ -79,7 +79,14 @@ public final class RemoteModpackPage extends ModpackPage {
 
     protected void onInstall() {
         if (!txtModpackName.validate()) return;
-        controller.getSettings().put(MODPACK_NAME, txtModpackName.getText());
+
+        // FSL: de-duplicate the instance name instead of refusing the install
+        String name = txtModpackName.getText();
+        HMCLGameRepository repository = controller.getSettings().get(ModpackPage.REPOSITORY);
+        if (repository != null)
+            name = repository.allocateInstanceId(name);
+
+        controller.getSettings().put(MODPACK_NAME, name);
         controller.onFinish();
     }
 

@@ -20,12 +20,7 @@ package org.jackhuang.hmcl;
 import org.jackhuang.hmcl.util.SelfDependencyPatcher;
 import org.jackhuang.hmcl.util.platform.Platform;
 
-import javax.swing.JDialog;
-import javax.swing.JLabel;
 import javax.swing.JOptionPane;
-import javax.swing.JProgressBar;
-import javax.swing.SwingUtilities;
-import java.awt.Dimension;
 import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
@@ -162,6 +157,9 @@ public final class JavaRuntimeRepair {
             }
 
             try {
+                // The cache is empty again, refill it in the styled window instead of letting the
+                // patcher open the plain HMCL one.
+                prepareJavaFx();
                 SelfDependencyPatcher.patch(true);
                 if (verifyJavaFx()) {
                     LOG.info("JavaFX has been repaired, continuing startup");
@@ -237,14 +235,66 @@ public final class JavaRuntimeRepair {
 
     private static JavaRuntimeBootstrap.Candidate downloadRuntime(int featureVersion) throws IOException {
         LOG.info("Downloading Java " + featureVersion + " into " + JavaRuntimeBootstrap.installRoot());
-        DownloadProgressDialog dialog = DownloadProgressDialog.create(i18n("fatal.java_runtime.downloading"));
+        DownloadProgressWindow dialog = DownloadProgressWindow.create(i18n("fatal.java_runtime.downloading"));
         try {
             JavaRuntimeBootstrap.Candidate candidate = JavaRuntimeBootstrap.download(featureVersion, dialog);
             LOG.info("Java " + featureVersion + " has been downloaded to " + candidate.getHome());
+
+            // FSL needs the JavaFX modules as well, and they live in a cache of their own. Fetching
+            // them here, inside the very same window, is what keeps the first start down to one
+            // download window: otherwise FSL restarts, patches JavaFX and shows the old HMCL window
+            // immediately after this one, downloading a second time.
+            downloadJavaFx(dialog, featureVersion);
+
             return candidate;
         } finally {
             if (dialog != null)
                 dialog.dispose();
+        }
+    }
+
+    /// Fetches the JavaFX modules before the startup code patches them in.
+    ///
+    /// The patcher is able to download on its own, but then it opens the plain HMCL progress window.
+    /// Preparing the cache beforehand keeps every download inside the same styled window.
+    public static void prepareJavaFx() {
+        int featureVersion = JavaRuntimeBootstrap.currentFeatureVersion();
+        try {
+            if (!SelfDependencyPatcher.isMissingDependencies(featureVersion))
+                return;
+        } catch (Throwable e) {
+            LOG.warning("Unable to inspect the JavaFX cache", e);
+            return;
+        }
+
+        LOG.info("Downloading the JavaFX modules for Java " + featureVersion);
+        DownloadProgressWindow dialog = DownloadProgressWindow.create(i18n("download.javafx"));
+        try {
+            int downloaded = SelfDependencyPatcher.downloadMissingDependencies(featureVersion, dialog);
+            LOG.info("Downloaded " + downloaded + " JavaFX module(s)");
+        } catch (IOException | RuntimeException e) {
+            LOG.warning("Failed to download the JavaFX modules", e);
+        } finally {
+            if (dialog != null)
+                dialog.dispose();
+        }
+    }
+
+    /// Downloads the JavaFX modules FSL needs for [featureVersion] into the shared cache.
+    ///
+    /// Progress is reported into the same window the runtime came from. A failure is only logged:
+    /// the regular startup path patches JavaFX again and can still recover on its own.
+    private static void downloadJavaFx(DownloadProgressWindow dialog, int featureVersion) {
+        try {
+            if (!SelfDependencyPatcher.isMissingDependencies(featureVersion)) {
+                LOG.info("JavaFX modules for Java " + featureVersion + " are already cached");
+                return;
+            }
+
+            int downloaded = SelfDependencyPatcher.downloadMissingDependencies(featureVersion, dialog);
+            LOG.info("Downloaded " + downloaded + " JavaFX module(s) for Java " + featureVersion);
+        } catch (IOException | RuntimeException e) {
+            LOG.warning("Failed to download the JavaFX modules", e);
         }
     }
 
@@ -329,75 +379,4 @@ public final class JavaRuntimeRepair {
         return builder.toString();
     }
 
-    /// Minimal progress window shown while a Java runtime is being downloaded.
-    private static final class DownloadProgressDialog implements JavaRuntimeBootstrap.ProgressListener {
-
-        private final JDialog dialog;
-        private final JLabel label;
-        private final JProgressBar progressBar;
-
-        private DownloadProgressDialog(JDialog dialog, JLabel label, JProgressBar progressBar) {
-            this.dialog = dialog;
-            this.label = label;
-            this.progressBar = progressBar;
-        }
-
-        static DownloadProgressDialog create(String title) {
-            if (isHeadless())
-                return null;
-            try {
-                JDialog dialog = new JDialog((java.awt.Frame) null, title, false);
-                JLabel label = new JLabel(i18n("fatal.java_runtime.preparing"));
-                JProgressBar progressBar = new JProgressBar(0, 100);
-                progressBar.setIndeterminate(true);
-                progressBar.setPreferredSize(new Dimension(320, 18));
-                dialog.setLayout(new java.awt.BorderLayout(8, 8));
-                dialog.add(label, java.awt.BorderLayout.NORTH);
-                dialog.add(progressBar, java.awt.BorderLayout.CENTER);
-                dialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
-                dialog.pack();
-                dialog.setLocationRelativeTo(null);
-                dialog.setVisible(true);
-                return new DownloadProgressDialog(dialog, label, progressBar);
-            } catch (Throwable e) {
-                LOG.warning("Failed to show the download window", e);
-                return null;
-            }
-        }
-
-        @Override
-        public void onMessage(String message) {
-            SwingUtilities.invokeLater(() -> {
-                try {
-                    label.setText(message);
-                } catch (Throwable ignored) {
-                }
-            });
-        }
-
-        @Override
-        public void onProgress(long downloaded, long total) {
-            SwingUtilities.invokeLater(() -> {
-                try {
-                    if (total > 0) {
-                        progressBar.setIndeterminate(false);
-                        progressBar.setValue((int) Math.min(100, downloaded * 100 / total));
-                    } else {
-                        progressBar.setIndeterminate(true);
-                    }
-                } catch (Throwable ignored) {
-                }
-            });
-        }
-
-        void dispose() {
-            SwingUtilities.invokeLater(() -> {
-                try {
-                    dialog.setVisible(false);
-                    dialog.dispose();
-                } catch (Throwable ignored) {
-                }
-            });
-        }
-    }
 }

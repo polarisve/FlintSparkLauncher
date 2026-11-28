@@ -83,9 +83,9 @@ public final class LocalModpackPage extends ModpackPage {
         } else {
             FXUtils.onChangeAndOperate(installAsVersion, installAsVersion -> {
                 if (installAsVersion) {
+                    // FSL: installing the same modpack twice as a version is allowed (name is de-duplicated)
                     txtModpackName.getValidators().setAll(
                             new RequiredValidator(),
-                            new Validator(i18n("install.new_game.already_exists"), str -> !repository.instanceIdConflicts(str)),
                             new Validator(i18n("install.new_game.malformed"), HMCLGameRepository::isValidInstanceId));
                 } else {
                     txtModpackName.getValidators().setAll(
@@ -213,6 +213,13 @@ public final class LocalModpackPage extends ModpackPage {
     }
 
     private void finishInstall(String name) {
+        // FSL: when installed as a version, a duplicate name is de-duplicated instead of rejected
+        if (installAsVersion.get()) {
+            HMCLGameRepository repository = controller.getSettings().get(ModpackPage.REPOSITORY);
+            if (repository != null)
+                name = repository.allocateInstanceId(name);
+        }
+
         controller.getSettings().put(MODPACK_NAME, name);
         controller.getSettings().put(MODPACK_EXCLUDED_FILES, getExcludedFiles());
         controller.onFinish();

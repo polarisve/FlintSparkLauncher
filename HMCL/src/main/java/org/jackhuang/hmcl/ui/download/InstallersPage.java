@@ -39,12 +39,15 @@ public class InstallersPage extends AbstractInstallersPage {
 
     private boolean isNameModifiedByUser = false;
 
+    /// FSL: installing the same version twice is allowed, so the folder name is de-duplicated on install.
+    private final HMCLGameRepository repository;
+
     public InstallersPage(WizardController controller, HMCLGameRepository repository, GameVersionNumber gameVersion, DownloadProvider downloadProvider) {
         super(controller, gameVersion, downloadProvider);
+        this.repository = repository;
 
         txtName.getValidators().addAll(
                 new RequiredValidator(),
-                new Validator(i18n("install.new_game.already_exists"), str -> !repository.instanceIdConflicts(str)),
                 new Validator(i18n("install.new_game.malformed"), HMCLGameRepository::isValidInstanceId));
         installable.bind(createBooleanBinding(txtName::validate, txtName.textProperty()));
 
@@ -93,7 +96,8 @@ public class InstallersPage extends AbstractInstallersPage {
     }
 
     protected void onInstall() {
-        GameInstanceID instanceId = new GameInstanceID(txtName.getText());
+        // FSL: a name that already exists is no longer rejected, it is de-duplicated ("26.2" -> "26.2-2")
+        GameInstanceID instanceId = new GameInstanceID(repository.allocateInstanceId(txtName.getText()));
 
         if (!checkName(instanceId.id())) {
             Controllers.dialog(new MessageDialogPane.Builder(

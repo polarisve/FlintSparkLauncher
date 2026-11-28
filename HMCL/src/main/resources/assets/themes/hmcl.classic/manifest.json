@@ -58,7 +58,7 @@
       "colorStyle": "fidelity",
       "background": {
         "type": "builtin",
-        "id": "2021-08-26",
+        "id": "fsl-dark",
         "opacity": 1.0
       },
       "titleBar": {
@@ -83,7 +83,7 @@
       "colorStyle": "fidelity",
       "background": {
         "type": "builtin",
-        "id": "2016-02-25",
+        "id": "fsl-dark",
         "opacity": 1.0
       },
       "titleBar": {
@@ -110,7 +110,7 @@
       "colorStyle": "fidelity",
       "background": {
         "type": "builtin",
-        "id": "2015-06-22"
+        "id": "fsl-dark"
       },
       "titleBar": {
         "transparent": false
