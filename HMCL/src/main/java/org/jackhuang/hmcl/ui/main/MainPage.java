@@ -134,9 +134,10 @@ public final class MainPage extends StackPane implements DecoratorPage {
 
         setPadding(new Insets(20));
 
-        // FSL: animated ember backdrop behind the whole home page (negative margin cancels the padding)
+        // FSL: animated ember backdrop behind the whole home page. The negative margin cancels both this
+        // page's 20px padding and .fsl-page-content's 4/6px padding, same as the side column below.
         EmberBackground emberBackground = new EmberBackground();
-        StackPane.setMargin(emberBackground, new Insets(-20));
+        StackPane.setMargin(emberBackground, new Insets(-24, -26, -24, -26));
         getChildren().add(emberBackground);
 
         // FSL: the upstream preview-channel notice points users to HMCL's own channels, so it stays off
