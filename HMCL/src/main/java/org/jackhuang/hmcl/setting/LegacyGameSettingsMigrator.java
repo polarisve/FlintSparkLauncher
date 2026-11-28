@@ -320,7 +320,7 @@ public final class LegacyGameSettingsMigrator {
                 : "");
 
         target.processPriorityProperty().setValue(parseEnum(source, "processPriority", ProcessPriority.class, ProcessPriority.NORMAL));
-        target.launcherVisibilityProperty().setValue(parseEnum(source, "launcherVisibility", LauncherVisibility.class, LauncherVisibility.HIDE));
+        target.launcherVisibilityProperty().setValue(parseEnum(source, "launcherVisibility", LauncherVisibility.class, LauncherVisibility.KEEP));
         target.gameArgumentsProperty().setValue(JsonUtils.getString(source, "minecraftArgs", ""));
         migrateLegacyRenderer(source, target);
         target.environmentVariablesProperty().setValue(JsonUtils.getString(source, "environmentVariables", ""));
