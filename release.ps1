@@ -322,22 +322,9 @@ $update = [ordered]@{
     changelog = ($Notes -replace '`n', "`n")
     page      = "https://gitee.com/$repo/releases/tag/$tag"
 }
-# 整包（exe + jre-x64 + 预置 JavaFX）供全新机器/无 Java 用户下载，解压双击即用。
-# 启动器内建自更新仍只认 jar：RemoteVersion.parse 只解析 jar/mirrors/jarsha1，
-# 增量更新没必要下整包，所以 bundle 是新增字段（Gson 忽略未知字段，老客户端不受影响）。
-if ($zipPath) {
-    $update["bundle"] = [ordered]@{
-        # 整包只发 GitHub（Gitee 附件配额只有 1GB，每版整包约 53MB）
-        url      = "https://github.com/$repo/releases/download/$tag/$zipName"
-        mirrors  = @()
-        sha256   = $zipSha256
-        size     = $zipSize
-        exe      = $BundleExeName
-        runtime  = $script:JreDirName
-        java     = $runtimeVersion
-        platform = "windows-x86_64"
-    }
-}
+# 整包（exe + jre-x64 + 预置 JavaFX）照常上传到 GitHub 发布页，但 update.json 不再写 bundle 字段
+# （2026-11-28 用户决定：所有版本的 update.json 都不带整包下载链接）。
+# 启动器自更新只认 jar/mirrors/jarsha1，去掉 bundle 不影响更新。
 $json = Join-Path $out "update.json"
 [IO.File]::WriteAllText($json, ($update | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
 
@@ -346,12 +333,8 @@ $check = [IO.File]::ReadAllText($json, [Text.Encoding]::UTF8) | ConvertFrom-Json
 if ($check.version -ne $Version) { throw "update.json 回读校验失败：version=$($check.version)，期望 $Version" }
 if ($check.jarsha1 -ne $sha1) { throw "update.json 回读校验失败：jarsha1=$($check.jarsha1)，期望 $sha1" }
 if (([string]$check.jarsha1).Length -ne 40) { throw "update.json 回读校验失败：jarsha1 长度异常" }
-if ($zipPath) {
-    if (-not $check.bundle) { throw "update.json 回读校验失败：缺少 bundle（整包信息）" }
-    if ($check.bundle.sha256 -ne $zipSha256) { throw "update.json 回读校验失败：bundle.sha256=$($check.bundle.sha256)，期望 $zipSha256" }
-    if (-not (Test-Path $zipPath)) { throw "整包不存在：$zipPath" }
-    if ([int64]$check.bundle.size -ne (Get-Item $zipPath).Length) { throw "update.json 回读校验失败：bundle.size 与实际文件不符" }
-}
+if ($check.PSObject.Properties.Name -contains "bundle") { throw "update.json 回读校验失败：不应包含 bundle 字段" }
+if ($zipPath -and -not (Test-Path $zipPath)) { throw "整包不存在：$zipPath" }
 
 # 产物同步：先删同名旧文件再复制（避免旧文件被占用时静默保留），复制后按哈希核对
 foreach ($f in @($jar, $exe)) {
