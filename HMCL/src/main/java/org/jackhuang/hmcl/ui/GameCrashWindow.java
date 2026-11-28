@@ -461,13 +461,16 @@ public class GameCrashWindow extends Stage {
                 logButton.setOnAction(e -> showLogWindow());
 
                 JFXButton helpButton = FXUtils.newRaisedButton(i18n("help"));
+                helpButton.setText(i18n("contact.chat.discord"));
                 helpButton.setOnAction(e -> FXUtils.openLink(Metadata.CONTACT_URL));
+                JFXButton qqButton = FXUtils.newRaisedButton(i18n("contact.chat.qq_group"));
+                qqButton.setOnAction(e -> FXUtils.openLink(Metadata.QQ_GROUP_URL));
                 FXUtils.installFastTooltip(helpButton, i18n("logwindow.help"));
 
                 toolBar.setPadding(new Insets(8));
                 toolBar.setSpacing(8);
                 toolBar.getStyleClass().add("jfx-tool-bar");
-                toolBar.getChildren().setAll(exportButtonPane, logButton, helpButton);
+                toolBar.getChildren().setAll(exportButtonPane, logButton, qqButton, helpButton);
             }
 
             getChildren().setAll(titlePane, infoPane, moddedPane, gameDirPane, toolBar);

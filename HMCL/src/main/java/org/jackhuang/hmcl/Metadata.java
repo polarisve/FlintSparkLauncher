@@ -63,6 +63,8 @@ public final class Metadata {
 
     public static final String DOCS_URL = "https://docs.hmcl.net";
     public static final String CONTACT_URL = "https://discord.gg/PSKcqrQZKP";
+    public static final String QQ_GROUP_URL = "https://qm.qq.com/q/ykZd37tD7a";
+    public static final String QQ_GROUP_NUMBER = "1135722957";
     public static final String CHANGELOG_URL = DOCS_URL + "/changelog/";
     public static final String EULA_URL = DOCS_URL + "/eula/hmcl.html";
     public static final String GROUPS_URL = CONTACT_URL;

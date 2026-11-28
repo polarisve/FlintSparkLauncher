@@ -17,6 +17,7 @@
  */
 package org.jackhuang.hmcl.ui.decorator;
 
+import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.construct.Navigator;
 import org.jackhuang.hmcl.ui.fsl.FslNavigationTabs;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
@@ -297,7 +298,10 @@ final class MainWindowPane extends StackPane {
         helpButton.setFocusTraversable(false);
         helpButton.setGraphic(SVG.HELP.createIcon(Themes.titleFillProperty()));
         helpButton.getStyleClass().add("jfx-decorator-button");
-        helpButton.setOnAction(event -> FXUtils.openLink(Metadata.CONTACT_URL));
+        helpButton.setOnAction(event -> {
+            Controllers.getSettingsPage().showFeedback();
+            Controllers.navigate(Controllers.getSettingsPage());
+        });
         decorator.forbidDraggingWindow(helpButton);
 
         JFXButton minimizeButton = new JFXButton();

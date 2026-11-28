@@ -19,6 +19,7 @@ package org.jackhuang.hmcl.ui.main;
 
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.VBox;
+import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.theme.Themes;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.WeakListenerHolder;
@@ -42,19 +43,24 @@ public class FeedbackPage extends SpinnerPane {
 
         ComponentList groups = new ComponentList();
         {
-            // FSL: no QQ group; the FSL Discord server is the only community link
-            var discord = LineButton.createExternalLinkButton("https://discord.gg/PSKcqrQZKP");
+            var qq = LineButton.createExternalLinkButton(Metadata.QQ_GROUP_URL);
+            qq.setLargeTitle(true);
+            qq.setLeading(FXUtils.newBuiltinImage("/assets/img/fsl-qq.png"));
+            qq.setTitle(i18n("contact.chat.qq_group"));
+            qq.setSubtitle(i18n("contact.chat.qq_group.statement"));
+
+            var discord = LineButton.createExternalLinkButton(Metadata.CONTACT_URL);
             discord.setLargeTitle(true);
             discord.setLeading(FXUtils.newBuiltinImage("/assets/img/discord.png"));
             discord.setTitle(i18n("contact.chat.discord"));
             discord.setSubtitle(i18n("contact.chat.discord.statement"));
 
-            groups.getContent().setAll(discord);
+            groups.getContent().setAll(qq, discord);
         }
 
         ComponentList feedback = new ComponentList();
         {
-            var github = LineButton.createExternalLinkButton("https://github.com/HMCL-dev/HMCL/issues/new/choose");
+            var github = LineButton.createExternalLinkButton("https://github.com/polarisve/FlintSparkLauncher/issues/new");
             github.setLargeTitle(true);
             github.setTitle(i18n("contact.feedback.github"));
             github.setSubtitle(i18n("contact.feedback.github.statement"));

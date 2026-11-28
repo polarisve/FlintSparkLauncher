@@ -53,10 +53,14 @@ public class CrashWindow extends Stage {
 
         Button btnContact = new Button();
         btnContact.setText(i18n("launcher.contact"));
+        btnContact.setText(i18n("contact.chat.discord"));
         btnContact.setOnAction(event -> FXUtils.openLink(Metadata.CONTACT_URL));
+        Button btnQQ = new Button(i18n("contact.chat.qq_group"));
+        btnQQ.setOnAction(event -> FXUtils.openLink(Metadata.QQ_GROUP_URL));
         HBox box = new HBox();
         box.setStyle("-fx-padding: 8px;");
-        box.getChildren().add(btnContact);
+        box.setSpacing(8);
+        box.getChildren().addAll(btnQQ, btnContact);
         box.setAlignment(Pos.CENTER_RIGHT);
 
         BorderPane pane = new BorderPane();
