@@ -34,6 +34,7 @@ import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
+import javafx.scene.Scene;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
@@ -120,7 +121,33 @@ public final class MainPage extends StackPane implements DecoratorPage {
         titleNode.setPadding(new Insets(0, 0, 0, 2));
         titleNode.setAlignment(Pos.CENTER_LEFT);
 
-        ImageView titleIcon = new ImageView(FXUtils.newBuiltinImage("/assets/img/icon-title.png"));
+        // FSL: render the title icon at the screen's exact pixel size from the 256px source, so that
+        // fractional scaling (e.g. 150%) doesn't resample the 48px @2x file and blur it.
+        ImageView titleIcon = new ImageView();
+        titleIcon.setFitWidth(24);
+        titleIcon.setFitHeight(24);
+        titleIcon.setSmooth(false);
+        double[] iconScale = {0};
+        Runnable updateIcon = () -> {
+            Scene scene = titleIcon.getScene();
+            double scale = scene != null && scene.getWindow() != null
+                    ? scene.getWindow().getRenderScaleX()
+                    : javafx.stage.Screen.getPrimary().getOutputScaleX();
+            scale = Math.max(1, scale);
+            if (scale != iconScale[0]) {
+                iconScale[0] = scale;
+                titleIcon.setImage(renderTitleIcon((int) Math.round(24 * scale)));
+            }
+            // Snap to whole physical pixels; at 150% a logical x of 13 lands on pixel 19.5 and blurs.
+            if (scene != null) {
+                javafx.geometry.Point2D p = titleIcon.localToScene(-titleIcon.getTranslateX(), -titleIcon.getTranslateY());
+                titleIcon.setTranslateX((Math.round(p.getX() * scale) - p.getX() * scale) / scale);
+                titleIcon.setTranslateY((Math.round(p.getY() * scale) - p.getY() * scale) / scale);
+            }
+        };
+        titleIcon.sceneProperty().addListener((o, a, b) -> updateIcon.run());
+        titleIcon.localToSceneTransformProperty().addListener((o, a, b) -> updateIcon.run());
+        updateIcon.run();
         Label titleLabel = new Label(Metadata.NAME);
         if (I18n.isUpsideDown()) {
             titleIcon.setRotate(180);
@@ -510,6 +537,48 @@ public final class MainPage extends StackPane implements DecoratorPage {
 
     public void setLatestVersion(RemoteVersion latestVersion) {
         this.latestVersion.set(latestVersion);
+    }
+
+    /// Downscales the 256px icon to exactly {@code px} pixels with area averaging (in linear alpha-premultiplied
+    /// space), which keeps edges crisper than JavaFX's built-in resampling.
+    private static javafx.scene.image.Image renderTitleIcon(int px) {
+        try (var in = MainPage.class.getResourceAsStream("/assets/img/icon@8x.png")) {
+            java.awt.image.BufferedImage src = javax.imageio.ImageIO.read(in);
+            int sw = src.getWidth(), sh = src.getHeight();
+            var out = new javafx.scene.image.WritableImage(px, px);
+            var writer = out.getPixelWriter();
+            for (int y = 0; y < px; y++) {
+                for (int x = 0; x < px; x++) {
+                    double x0 = x * (double) sw / px, x1 = (x + 1) * (double) sw / px;
+                    double y0 = y * (double) sh / px, y1 = (y + 1) * (double) sh / px;
+                    double a = 0, r = 0, g = 0, b = 0, total = 0;
+                    for (int sy = (int) y0; sy < Math.min(sh, Math.ceil(y1)); sy++) {
+                        double wy = Math.min(sy + 1, y1) - Math.max(sy, y0);
+                        for (int sx = (int) x0; sx < Math.min(sw, Math.ceil(x1)); sx++) {
+                            double w = wy * (Math.min(sx + 1, x1) - Math.max(sx, x0));
+                            int argb = src.getRGB(sx, sy);
+                            double pa = ((argb >>> 24) / 255.0) * w;
+                            a += pa;
+                            r += ((argb >> 16) & 0xFF) * pa;
+                            g += ((argb >> 8) & 0xFF) * pa;
+                            b += (argb & 0xFF) * pa;
+                            total += w;
+                        }
+                    }
+                    int argb = 0;
+                    if (a > 0) {
+                        argb = ((int) Math.round(a / total * 255) << 24)
+                                | ((int) Math.round(r / a) << 16)
+                                | ((int) Math.round(g / a) << 8)
+                                | (int) Math.round(b / a);
+                    }
+                    writer.setArgb(x, y, argb);
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            return FXUtils.newBuiltinImage("/assets/img/icon-title.png");
+        }
     }
 
 }
