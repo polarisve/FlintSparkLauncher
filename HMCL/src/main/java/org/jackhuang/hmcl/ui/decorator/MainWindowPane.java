@@ -168,7 +168,7 @@ final class MainWindowPane extends StackPane {
             }
         };
         titleBar.setPickOnBounds(false);
-        titleBar.getStyleClass().add("jfx-tool-bar");
+        titleBar.getStyleClass().addAll("jfx-tool-bar", "fsl-titlebar");
         // FSL: BorderPane asks for the sum of its parts' preferred widths as its minimum. With a long
         // page title that exceeded the window, so the whole window content was laid out wider than
         // the window, centered, and cut off on both sides. Let everything shrink to the window.
