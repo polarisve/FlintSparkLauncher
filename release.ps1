@@ -327,8 +327,9 @@ $update = [ordered]@{
 # 增量更新没必要下整包，所以 bundle 是新增字段（Gson 忽略未知字段，老客户端不受影响）。
 if ($zipPath) {
     $update["bundle"] = [ordered]@{
-        url      = "https://gitee.com/$repo/releases/download/$tag/$zipName"
-        mirrors  = @("https://github.com/$repo/releases/download/$tag/$zipName")
+        # 整包只发 GitHub（Gitee 附件配额只有 1GB，每版整包约 53MB）
+        url      = "https://github.com/$repo/releases/download/$tag/$zipName"
+        mirrors  = @()
         sha256   = $zipSha256
         size     = $zipSize
         exe      = $BundleExeName
@@ -432,7 +433,7 @@ $giteeJob = Start-Job -Name "Gitee" -ArgumentList ($jobArgs + $giteeToken) -Scri
     $rel = Read-Json $resp
     if (-not $rel.id) { throw "Gitee 创建发布失败：$($rel.message)（版本 $tag 可能已经发过了）" }
     $assets = @("FSL-$Version.jar", "update.json", "FSL-$Version.exe")
-    if ($zipName) { $assets += $zipName }
+    # Gitee 不传整包 zip：附件配额只有 1GB，整包只发 GitHub
     foreach ($name in $assets) {
         $file = Join-Path $out $name
         curl.exe -s -m 1800 -o $resp -X POST -F "access_token=$token" -F "file=@$file" "$api/releases/$($rel.id)/attach_files"
