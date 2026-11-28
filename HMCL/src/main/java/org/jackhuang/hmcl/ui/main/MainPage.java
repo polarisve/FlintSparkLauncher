@@ -334,11 +334,13 @@ public final class MainPage extends StackPane implements DecoratorPage {
         // FSL: like PCL, launching shows the launch card in the middle, account stays at top, button disappears
         Node accountCard = FslHome.createAccountCard();
         Region sideColumn = (Region) org.jackhuang.hmcl.ui.fsl.FslLaunchCard.wrap(accountCard, launchPane);
-        sideColumn.getStyleClass().add("fsl-home-side");
-        FXUtils.setLimitWidth(sideColumn, 240);
+        // The inner column already carries fsl-home-side; adding it here too drew a second,
+        // inset background and left a step at the top-left corner.
+        FXUtils.setLimitWidth(sideColumn, 246);
         StackPane.setAlignment(sideColumn, Pos.CENTER_LEFT);
-        // Cancel this page's padding so the panel touches the window edges
-        StackPane.setMargin(sideColumn, new Insets(-20, 0, -20, -20));
+        // Cancel this page's padding (20) plus the root content padding (.fsl-page-content: 4 6)
+        // so the panel touches the window edges and lines up with the title bar
+        StackPane.setMargin(sideColumn, new Insets(-24, 0, -24, -26));
         StackPane.setMargin(hero, new Insets(0, 0, 0, 236));
         getChildren().addAll(sideColumn, hero, updatePane);
 
